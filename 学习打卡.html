@@ -697,6 +697,64 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
+/* ==========================================================================
+   云同步模块样式
+   ========================================================================== */
+.sync-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff; color: var(--ink-2);
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background .2s, border-color .2s, transform .12s, box-shadow .2s;
+  white-space: nowrap;
+}
+.sync-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.sync-pill .dot-sync {
+  width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--muted); transition: background .2s;
+}
+.sync-pill.sync-ok { border-color: var(--primary); color: var(--primary-dark); }
+.sync-pill.sync-ok .dot-sync { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.sync-pill.sync-idle,
+.sync-pill.sync-locked { border-color: var(--line); color: var(--muted); }
+.sync-pill.sync-locked .dot-sync { background: var(--amber); }
+.sync-pill.sync-syncing { border-color: var(--accent); color: var(--accent-ink); }
+.sync-pill.sync-syncing .dot-sync { background: var(--accent); animation: pulse 1s infinite; }
+.sync-pill.sync-error { border-color: var(--secondary); color: var(--secondary-ink); }
+.sync-pill.sync-error .dot-sync { background: var(--secondary); }
+.sync-pill .spin { display: inline-flex; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* 开关 */
+.switch {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--muted); user-select: none;
+}
+.switch::before {
+  content: ""; width: 34px; height: 19px; border-radius: 999px;
+  background: var(--line); transition: background .2s; flex: 0 0 auto;
+}
+.switch::after {
+  content: ""; position: absolute; left: 2px; top: calc(50% - 7.5px);
+  width: 15px; height: 15px; border-radius: 50%;
+  background: #fff; box-shadow: var(--shadow-sm); transition: left .2s;
+}
+.switch.on { color: var(--primary-dark); }
+.switch.on::before { background: var(--primary); }
+.switch.on::after { left: 17px; }
+
+/* 弹窗内键值 */
+.kv {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 8px 0; border-bottom: 1px dashed var(--line-2); font-size: 13px;
+}
+.kv:last-of-type { border-bottom: none; }
+.kv span { color: var(--muted); }
+.kv b { color: var(--ink); font-weight: 600; word-break: break-all; text-align: right; }
+
 </style>
 </head>
 <body>
@@ -749,6 +807,12 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     </g>
     <g id="ic-target" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6" fill="currentColor"/>
+    </g>
+    <g id="ic-cloud" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 18a4 4 0 0 1-.5-7.97A5 5 0 0 1 16 9.4a3.5 3.5 0 0 1 1 6.86"/><path d="M12 13.5v4.5"/><path d="M9.6 15.4 12 13l2.4 2.4"/>
+    </g>
+    <g id="ic-sync" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 8"/><path d="M20 4.5V8h-3.5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 16"/><path d="M4 19.5V16h3.5"/>
     </g>
   </defs>
 </svg>
@@ -2421,7 +2485,16 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       '</div>' +
       '<div class="hint">清空浏览器缓存 / 更换设备前，建议先备份 JSON。恢复备份会覆盖当前全部数据。</div>' +
       '<input type="file" id="restore-file" accept=".json,application/json" class="sr-only">' +
-      '</div>';
+      '</div>' +
+
+      '<div class="card rise mt-16" style="--d:.2s">' +
+      '<div class="card-head"><div class="card-title"><span class="dot acc"></span>云同步 · 跨设备备份</div>' +
+      '<span class="card-desc" id="sync-card-status">—</span></div>' +
+      '<div class="hint">将打卡数据加密后备份到你的 GitHub 私有 Gist，换设备 / 清缓存也能恢复。需要 GitHub 个人访问令牌（仅需 gist 权限）。</div>' +
+      '<div class="chip-row">' +
+      '<button class="btn btn-sm btn-primary" data-act="sync-open">' + ic('ic-cloud', 14) + '打开云同步</button>' +
+      '<button class="btn btn-sm" data-act="sync-now" id="sync-card-btn">立即同步</button>' +
+      '</div></div>';
     refreshHistoryBody();
   }
   function refreshHistoryBody() {
@@ -2937,6 +3010,666 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 
   /* 启动 */
   A.boot();
+})();
+
+/* ==========================================================================
+   晨露学习打卡 · 云同步模块（纯前端）
+   方案：GitHub Gist 作为存储后端
+   - 用户令牌经 AES-GCM(PBKDF2 派生密钥) 加密后仅存本机
+   - 打卡数据以 JSON 形式保存/读取到用户私有 Gist
+   - 实体级冲突合并（plans / records 按 id，days 按日期 + focus 按 planId）
+   - 顶栏状态 pill + 历史页"云同步"卡片 + 连接/解锁/管理弹窗 + 自动同步
+   依赖：window.App（核心层已暴露 $/$$/esc/toast/openModal/closeModal/confirmModal/
+         store/save/ui/renderView/renderPageActions/renderNav/syncTimerUI）
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var A = window.App;
+  if (!A) { console.error('[Sync] App 未就绪'); return; }
+
+  /* ------------------------------------------------------------ 常量 */
+  var GH_API = 'https://api.github.com';
+  var GIST_FILENAME = 'study-checkin-sync.json';
+  var VAULT_KEY = 'chenlu.sync.vault';
+  var SCHEMA = 1;
+  var CLIENT_TAG = 'study-checkin-web';
+  var PBKDF2_ITER = 200000;
+
+  /* ----------------------------------------------------- 内部状态 */
+  var session = null; // { token, gistId, autoSync, pass }
+  var origSave = A.save;
+  var state = { status: 'idle', message: '', lastSyncAt: 0, lastPullAt: 0, lastError: '' };
+  var autoTimer = null;
+  var wrapped = false;
+
+  /* ============================================================ 加密 */
+  function bufToB64(buf) {
+    var bytes = new Uint8Array(buf);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function b64ToBuf(b64) {
+    var bin = atob(b64);
+    var len = bin.length;
+    var bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  function getSubtle() {
+    var c = (typeof crypto !== 'undefined' && crypto) ||
+      (typeof window !== 'undefined' && window.crypto);
+    return c && c.subtle ? c.subtle : null;
+  }
+  function rand(bytes) {
+    var c = (typeof crypto !== 'undefined' && crypto) ||
+      (typeof window !== 'undefined' && window.crypto);
+    if (!c || !c.getRandomValues) throw new Error('当前环境不支持随机数生成');
+    return c.getRandomValues(new Uint8Array(bytes));
+  }
+  function deriveKey(pass, saltBuf) {
+    var subtle = getSubtle();
+    if (!subtle) return Promise.reject(new Error('当前环境不支持加密（需 HTTPS 或现代浏览器）'));
+    return subtle.importKey('raw', new TextEncoder().encode(pass), { name: 'PBKDF2' }, false, ['deriveKey'])
+      .then(function (base) {
+        return subtle.deriveKey(
+          { name: 'PBKDF2', salt: saltBuf, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+          base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      });
+  }
+  function encryptJSON(obj, pass) {
+    var subtle = getSubtle();
+    if (!subtle) return Promise.reject(new Error('当前环境不支持加密'));
+    var salt = rand(16);
+    var iv = rand(12);
+    return deriveKey(pass, salt).then(function (key) {
+      var data = new TextEncoder().encode(JSON.stringify(obj));
+      return subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, data);
+    }).then(function (ct) {
+      return { v: 1, salt: bufToB64(salt.buffer), iv: bufToB64(iv.buffer), ct: bufToB64(ct) };
+    });
+  }
+  function decryptJSON(vault, pass) {
+    var subtle = getSubtle();
+    if (!subtle) return Promise.reject(new Error('当前环境不支持加密'));
+    var salt = new Uint8Array(b64ToBuf(vault.salt));
+    var iv = new Uint8Array(b64ToBuf(vault.iv));
+    return deriveKey(pass, salt).then(function (key) {
+      return subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, new Uint8Array(b64ToBuf(vault.ct)));
+    }).then(function (pt) {
+      return JSON.parse(new TextDecoder().decode(pt));
+    });
+  }
+
+  /* ============================================================ 存储 */
+  function loadVault() {
+    try { var r = localStorage.getItem(VAULT_KEY); return r ? JSON.parse(r) : null; }
+    catch (e) { return null; }
+  }
+  function saveVault(v) {
+    try { localStorage.setItem(VAULT_KEY, JSON.stringify(v)); return true; } catch (e) { return false; }
+  }
+  function clearVault() { try { localStorage.removeItem(VAULT_KEY); } catch (e) { } }
+  function hasVault() { return !!loadVault(); }
+
+  function persistSession() {
+    if (!session) return Promise.resolve();
+    return encryptJSON(
+      { token: session.token, gistId: session.gistId, autoSync: !!session.autoSync },
+      session.pass
+    ).then(function (v) { saveVault(v); });
+  }
+
+  /* ============================================================ 合并 */
+  function entStamp(e) { return Number(e.updatedAt) || Number(e.createdAt) || 0; }
+
+  function mergeEntities(a, b) {
+    var map = {};
+    (a || []).forEach(function (e) { if (e && e.id) map[e.id] = e; });
+    (b || []).forEach(function (e) {
+      if (!e || !e.id) return;
+      var cur = map[e.id];
+      if (!cur) map[e.id] = e;
+      else if (entStamp(e) >= entStamp(cur)) map[e.id] = e;
+    });
+    return Object.keys(map).map(function (k) { return map[k]; });
+  }
+
+  function mergeDays(a, b) {
+    var out = {};
+    var keys = {};
+    Object.keys(a || {}).forEach(function (k) { keys[k] = 1; });
+    Object.keys(b || {}).forEach(function (k) { keys[k] = 1; });
+    Object.keys(keys).forEach(function (k) {
+      var da = (a || {})[k], db = (b || {})[k];
+      if (da && !db) out[k] = da;
+      else if (db && !da) out[k] = db;
+      else {
+        var focus = {};
+        var fa = (da.focus || {}), fb = (db.focus || {});
+        var pk = {};
+        Object.keys(fa).forEach(function (p) { pk[p] = 1; });
+        Object.keys(fb).forEach(function (p) { pk[p] = 1; });
+        Object.keys(pk).forEach(function (p) {
+          var va = fa[p] || '', vb = fb[p] || '';
+          focus[p] = (vb.length >= va.length) ? vb : va;
+        });
+        out[k] = { date: k, focus: focus, createdAt: Math.max(da.createdAt || 0, db.createdAt || 0) };
+      }
+    });
+    return out;
+  }
+
+  function tStamp(t) { return t ? (Number(t.startedAt) || 0) : 0; }
+  function mergeTimer(a, b) {
+    if (a && a.running) return a;
+    if (b && b.running) return b;
+    if (a && b) return tStamp(a) >= tStamp(b) ? a : b;
+    return a || b || null;
+  }
+
+  function mergeStore(local, remote) {
+    return {
+      version: Math.max(local.version || 2, remote.version || 2),
+      createdAt: Math.min(local.createdAt || Date.now(), remote.createdAt || Date.now()),
+      updatedAt: Date.now(),
+      plans: mergeEntities(local.plans, remote.plans),
+      records: mergeEntities(local.records, remote.records),
+      days: mergeDays(local.days, remote.days),
+      timer: mergeTimer(local.timer, remote.timer),
+      meta: Object.assign({}, local.meta || {}, remote.meta || {})
+    };
+  }
+
+  function cloneStore(s) {
+    return JSON.parse(JSON.stringify({
+      version: s.version, createdAt: s.createdAt, updatedAt: s.updatedAt,
+      plans: s.plans, days: s.days, records: s.records, timer: s.timer, meta: s.meta
+    }));
+  }
+
+  function ensureMetaSync() {
+    if (!A.store.meta) A.store.meta = {};
+    if (!A.store.meta.sync) A.store.meta.sync = { rev: 0, lastSyncAt: 0, lastPullAt: 0 };
+  }
+
+  function emptyData() {
+    var s = A.store;
+    return {
+      version: s.version, createdAt: s.createdAt, updatedAt: s.updatedAt,
+      plans: [], days: {}, records: [], timer: null,
+      meta: { lastOpen: A.today(), notice: '', sync: { rev: 0, lastSyncAt: 0, lastPullAt: 0 } }
+    };
+  }
+
+  function snapshotCount(s) {
+    s = s || A.store;
+    return (s.plans ? s.plans.length : 0) + (s.records ? s.records.length : 0) +
+      (s.days ? Object.keys(s.days).length : 0);
+  }
+
+  function applyStore(merged) {
+    var s = A.store;
+    s.plans = merged.plans;
+    s.records = merged.records;
+    s.days = merged.days;
+    s.timer = merged.timer;
+    s.version = merged.version || s.version;
+    s.createdAt = merged.createdAt || s.createdAt;
+    s.updatedAt = merged.updatedAt || s.updatedAt;
+    s.meta = merged.meta || {};
+    if (!s.meta.sync) s.meta.sync = { rev: 0, lastSyncAt: 0, lastPullAt: 0 };
+    origSave();
+  }
+
+  /* ============================================================ Gist API */
+  function ghHeaders() {
+    var h = {
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json'
+    };
+    if (session && session.token) h['Authorization'] = 'Bearer ' + session.token;
+    return h;
+  }
+  function ghFetch(path, opt) {
+    opt = opt || {};
+    if (typeof fetch !== 'function') return Promise.reject(new Error('当前环境无法联网（fetch 不可用）'));
+    var init = { method: opt.method || 'GET', headers: ghHeaders() };
+    if (opt.body) init.body = opt.body;
+    return fetch(GH_API + path, init).then(function (res) {
+      var ct = res.headers && res.headers.get ? res.headers.get('content-type') : '';
+      var p = (ct && ct.indexOf('application/json') >= 0)
+        ? res.json()
+        : res.text().then(function (t) { return { message: t }; });
+      return p.then(function (body) {
+        if (!res.ok) {
+          var e = new Error((body && body.message) || ('HTTP ' + res.status));
+          e.status = res.status; e.body = body;
+          if (res.status === 401) e.message = 'GitHub 令牌无效或权限不足（需要 gist 权限）';
+          if (res.status === 403) e.message = '请求被拒绝：可能令牌权限不足或触发频率限制';
+          if (res.status === 404) e.message = '未找到该 Gist（ID 错误或已被删除）';
+          throw e;
+        }
+        return body;
+      });
+    });
+  }
+
+  function validateGist() {
+    return ghFetch('/gists/' + session.gistId)
+      .then(function (g) { return !!(g.files && g.files[GIST_FILENAME]); })
+      .catch(function () { return false; });
+  }
+
+  function createGist() {
+    var empty = { schema: SCHEMA, rev: 0, updatedAt: Date.now(), client: CLIENT_TAG, data: emptyData() };
+    return ghFetch('/gists', {
+      method: 'POST',
+      body: JSON.stringify({
+        description: '晨露学习打卡 · 云同步备份', public: false,
+        files: createFiles(empty)
+      })
+    }).then(function (g) {
+      if (!g || !g.id) throw new Error('创建 Gist 失败');
+      session.gistId = g.id;
+      return persistSession();
+    });
+  }
+  function createFiles(payload) {
+    var o = {};
+    o[GIST_FILENAME] = { content: JSON.stringify(payload) };
+    return o;
+  }
+
+  /* ============================================================ 同步操作 */
+  function push() {
+    if (!session) return Promise.reject(new Error('尚未连接云同步'));
+    setState('syncing', '正在上传…');
+    return ghFetch('/gists/' + session.gistId).then(function (gist) {
+      var file = gist.files && gist.files[GIST_FILENAME];
+      var remoteRev = 0, remoteData = null;
+      if (file && file.content) {
+        try { var p = JSON.parse(file.content); remoteRev = p.rev || 0; remoteData = p.data || null; }
+        catch (e) { remoteData = null; }
+      }
+      var base = cloneStore(A.store);
+      var merged = remoteData ? mergeStore(base, remoteData) : base;
+      var baseRev = Math.max(remoteRev, (A.store.meta.sync ? A.store.meta.sync.rev : 0));
+      var newRev = baseRev + 1;
+      merged.meta = merged.meta || {};
+      merged.meta.sync = {
+        rev: newRev,
+        lastSyncAt: Date.now(),
+        lastPullAt: (A.store.meta.sync ? A.store.meta.sync.lastPullAt : 0)
+      };
+      var payload = {
+        schema: SCHEMA, rev: newRev, updatedAt: Date.now(), client: CLIENT_TAG,
+        data: {
+          version: merged.version, createdAt: merged.createdAt, updatedAt: merged.updatedAt,
+          plans: merged.plans, days: merged.days, records: merged.records, timer: merged.timer,
+          meta: {
+            lastOpen: (merged.meta && merged.meta.lastOpen) || A.today(),
+            notice: (merged.meta && merged.meta.notice) || '',
+            sync: merged.meta.sync
+          }
+        }
+      };
+      return ghFetch('/gists/' + session.gistId, {
+        method: 'PATCH',
+        body: JSON.stringify({ files: createFiles(payload) })
+      }).then(function () {
+        applyStore(merged);
+        refreshUI();
+        setState('ok', '已同步', { lastSyncAt: Date.now() });
+      });
+    });
+  }
+
+  function pull() {
+    if (!session) return Promise.reject(new Error('尚未连接云同步'));
+    setState('syncing', '正在拉取云端…');
+    return ghFetch('/gists/' + session.gistId).then(function (gist) {
+      var file = gist.files && gist.files[GIST_FILENAME];
+      if (!file || !file.content) { setState('ok', '云端暂无数据'); return { changed: false }; }
+      var payload;
+      try { payload = JSON.parse(file.content); } catch (e) { setState('error', '云端数据解析失败'); return { changed: false }; }
+      var remote = payload.data;
+      if (!remote) { setState('ok', '云端暂无数据'); return { changed: false }; }
+      var before = snapshotCount(A.store);
+      var merged = mergeStore(A.store, remote);
+      merged.meta = merged.meta || {};
+      merged.meta.sync = {
+        rev: payload.rev || 0,
+        lastSyncAt: (A.store.meta.sync ? A.store.meta.sync.lastSyncAt : 0),
+        lastPullAt: Date.now()
+      };
+      applyStore(merged);
+      refreshUI();
+      var after = snapshotCount(A.store);
+      var diff = after - before;
+      setState('ok', '已合并云端（' + (diff >= 0 ? '+' : '') + diff + ' 项）', { lastPullAt: Date.now() });
+      return { changed: diff !== 0 };
+    });
+  }
+
+  /* ============================================================ 自动同步 */
+  function wrapSave() {
+    if (wrapped) return; wrapped = true;
+    origSave = A.save;
+    A.save = function () {
+      var r = origSave.apply(A, arguments);
+      onLocalChange();
+      return r;
+    };
+  }
+  function onLocalChange() {
+    if (!session || !session.autoSync) return;
+    if (state.status === 'syncing') return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(function () {
+      push().then(function () { }).catch(function (e) { reportError(e); });
+    }, 2500);
+  }
+
+  /* ============================================================ UI：状态机 */
+  function fmtTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function statusText() {
+    if (state.status === 'idle') return '未同步';
+    if (state.status === 'locked') return '已加密';
+    if (state.status === 'syncing') return '同步中…';
+    if (state.status === 'error') return '同步失败';
+    if (state.status === 'ok') return '已同步' + (state.lastSyncAt ? ' ' + fmtTime(state.lastSyncAt) : '');
+    return '云同步';
+  }
+  function setState(status, message, extra) {
+    state.status = status;
+    state.message = message || '';
+    if (extra) {
+      if (extra.lastSyncAt) state.lastSyncAt = extra.lastSyncAt;
+      if (extra.lastPullAt) state.lastPullAt = extra.lastPullAt;
+    }
+    updatePill();
+    updateCard();
+  }
+  function reportError(e) {
+    state.lastError = (e && e.message) || String(e);
+    setState('error', '同步失败：' + state.lastError);
+  }
+
+  function syncPillInner() {
+    var icon = state.status === 'syncing'
+      ? '<span class="spin">' + svgUse('ic-sync', 14) + '</span>'
+      : (state.status === 'error' ? '⚠' : (state.status === 'locked' ? '🔒' : '☁'));
+    return '<span class="dot-sync"></span>' + icon + '<span>' + statusText() + '</span>';
+  }
+  function svgUse(id, size) {
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24"><use href="#' + id + '"/></svg>';
+  }
+  function injectPill() {
+    var box = A.$('#page-actions');
+    if (!box) return;
+    var pill = document.createElement('button');
+    pill.className = 'sync-pill sync-' + state.status;
+    pill.setAttribute('data-act', 'sync-open');
+    pill.title = '云同步：' + statusText();
+    pill.innerHTML = syncPillInner();
+    box.appendChild(pill);
+  }
+  function updatePill() {
+    var el = A.$('.sync-pill');
+    if (el) {
+      el.className = 'sync-pill sync-' + state.status;
+      el.title = '云同步：' + statusText();
+      el.innerHTML = syncPillInner();
+    }
+  }
+  function updateCard() {
+    var st = A.$('#sync-card-status');
+    if (st) st.textContent = session ? statusText() : (state.status === 'locked' ? '已加密，需解锁口令' : '未连接，点击配置');
+    var btn = A.$('#sync-card-btn');
+    if (btn) {
+      btn.disabled = !session;
+      btn.textContent = session ? '立即同步' : '需先连接';
+    }
+  }
+  function refreshUI() {
+    try {
+      var root = A.$('#view-' + A.ui.route);
+      if (root) A.renderView(A.ui.route, root);
+      A.renderPageActions();
+      A.renderNav();
+      A.syncTimerUI();
+    } catch (e) { /* 不应影响同步 */ }
+  }
+  function refreshAll() { refreshUI(); updatePill(); updateCard(); }
+
+  /* ============================================================ 弹窗 UI */
+  function openPanel() {
+    if (!session && hasVault()) renderUnlock();
+    else if (!session) renderConnect();
+    else renderManage();
+  }
+
+  function renderConnect() {
+    A.openModal({
+      title: '连接云同步',
+      sub: '把打卡数据加密备份到你的 GitHub 私有 Gist',
+      body:
+        '<form data-submit="sync-connect">' +
+        '<div class="form-row"><label class="lbl">GitHub 访问令牌 (Token)</label>' +
+        '<input class="input" type="password" name="token" data-autofocus placeholder="ghp_xxx 或 github_pat_xxx">' +
+        '<div class="hint">需要带 <b>gist</b> 权限的 Personal Access Token。' +
+        '<a href="https://github.com/settings/tokens" target="_blank" rel="noopener">前往创建 →</a> ' +
+        '令牌仅保存在本机（经口令加密），用于读写你自己的备份 Gist。</div></div>' +
+        '<div class="form-row"><label class="lbl">同步口令（用于加密本地令牌）</label>' +
+        '<input class="input" type="password" name="pass" placeholder="设置一段口令，至少 6 位">' +
+        '<div class="hint">遗忘后无法恢复云端备份，请牢记。</div></div>' +
+        '<div class="form-row"><label class="lbl">确认口令</label>' +
+        '<input class="input" type="password" name="pass2" placeholder="再次输入口令"></div>' +
+        '<div class="form-row"><label class="lbl">已有备份 Gist ID（可选）</label>' +
+        '<input class="input" type="text" name="gistId" placeholder="留空则自动新建一个私有 Gist">' +
+        '<div class="hint">若之前已在其他设备创建过备份，填入那个 Gist ID 以复用同一份数据。</div></div>' +
+        '<div class="form-row" style="flex-direction:row;align-items:center;gap:10px">' +
+        '<label class="switch on" data-act="sync-toggle-auto" style="margin:0">自动同步</label>' +
+        '<span class="hint" style="margin:0">开启后，本地改动会自动上传到云端</span></div>' +
+        '<div class="modal-foot">' +
+        '<button type="button" class="btn" data-act="modal-close">取消</button>' +
+        '<button type="submit" class="btn btn-primary">保存并连接</button></div>' +
+        '</form>',
+      maskClose: false
+    });
+  }
+
+  function renderUnlock() {
+    A.openModal({
+      title: '解锁云同步',
+      sub: '输入同步口令以解密本地令牌并拉取云端数据',
+      body:
+        '<form data-submit="sync-unlock">' +
+        '<div class="form-row"><label class="lbl">同步口令</label>' +
+        '<input class="input" type="password" name="pass" data-autofocus placeholder="输入之前设置的口令">' +
+        '<div class="hint">解锁后会自动从云端拉取并合并数据到本机。</div></div>' +
+        '<div class="modal-foot">' +
+        '<button type="button" class="btn" data-act="modal-close">取消</button>' +
+        '<button type="submit" class="btn btn-primary">解锁并同步</button></div>' +
+        '</form>',
+      maskClose: false
+    });
+  }
+
+  function renderManage() {
+    var gid = session.gistId || '—';
+    var masked = gid.length > 8 ? (gid.slice(0, 4) + '…' + gid.slice(-4)) : gid;
+    A.openModal({
+      title: '云同步管理',
+      sub: '数据已加密备份到 GitHub 私有 Gist',
+      body:
+        '<div class="kv"><span>备份 Gist</span><b>' + A.esc(masked) + '</b></div>' +
+        '<div class="kv"><span>同步状态</span><b>' + A.esc(statusText()) + '</b></div>' +
+        (state.lastSyncAt ? '<div class="kv"><span>上次同步</span><b>' + fmtTime(state.lastSyncAt) + '</b></div>' : '') +
+        (state.lastPullAt ? '<div class="kv"><span>上次拉取</span><b>' + fmtTime(state.lastPullAt) + '</b></div>' : '') +
+        (state.lastError ? '<div class="hint" style="color:var(--secondary-ink)">最近错误：' + A.esc(state.lastError) + '</div>' : '') +
+        '<div class="form-row" style="flex-direction:row;align-items:center;gap:10px;margin-top:8px">' +
+        '<label class="switch ' + (session.autoSync ? 'on' : '') + '" data-act="sync-toggle-auto" style="margin:0">自动同步</label>' +
+        '<span class="hint" style="margin:0">' + (session.autoSync ? '已开启：本地改动自动上传' : '已关闭：仅手动同步') + '</span></div>' +
+        '<div class="chip-row" style="margin-top:14px">' +
+        '<button class="btn btn-sm btn-primary" data-act="sync-now">立即同步</button>' +
+        '<button class="btn btn-sm" data-act="sync-change-pass">更改口令</button>' +
+        '<button class="btn btn-sm" data-act="sync-lock">锁定</button>' +
+        '<button class="btn btn-sm btn-danger" data-act="sync-disconnect">断开并清除</button>' +
+        '</div>',
+      maskClose: true
+    });
+  }
+
+  function openChangePass() {
+    A.openModal({
+      title: '更改同步口令',
+      sub: '将用新口令重新加密本地令牌',
+      body:
+        '<form data-submit="sync-pass-submit">' +
+        '<div class="form-row"><label class="lbl">新口令</label>' +
+        '<input class="input" type="password" name="np" data-autofocus placeholder="至少 6 位"></div>' +
+        '<div class="form-row"><label class="lbl">确认新口令</label>' +
+        '<input class="input" type="password" name="np2" placeholder="再次输入"></div>' +
+        '<div class="modal-foot">' +
+        '<button type="button" class="btn" data-act="modal-close">取消</button>' +
+        '<button type="submit" class="btn btn-primary">更新</button></div>' +
+        '</form>',
+      maskClose: false
+    });
+  }
+
+  /* ============================================================ 行为 */
+  function handleConnect(form) {
+    var token = (form.querySelector('[name=token]').value || '').trim();
+    var pass = form.querySelector('[name=pass]').value;
+    var pass2 = form.querySelector('[name=pass2]').value;
+    var gistId = (form.querySelector('[name=gistId]').value || '').trim();
+    if (!token) { A.toast('请填写 GitHub 令牌', 'warn'); return; }
+    if (pass.length < 6) { A.toast('同步口令至少 6 位', 'warn'); return; }
+    if (pass !== pass2) { A.toast('两次口令不一致', 'warn'); return; }
+
+    state.lastError = '';
+    setState('syncing', '正在连接…');
+    session = { token: token, gistId: gistId || null, autoSync: true, pass: pass };
+    persistSession()
+      .then(function () { return gistId ? validateGist().then(function (ok) { if (!ok) throw new Error('Gist ID 无效或无权限'); }) : createGist(); })
+      .then(function () { return push(); })
+      .then(function () { A.closeModal(); A.toast('云同步已连接', 'ok'); refreshAll(); })
+      .catch(function (e) { reportError(e); A.toast('连接失败：' + (e.message || e), 'warn'); });
+  }
+
+  function handleUnlock(form) {
+    var pass = form.querySelector('[name=pass]').value;
+    if (!pass) { A.toast('请输入口令', 'warn'); return; }
+    var vault = loadVault();
+    if (!vault) { A.toast('没有可用的加密备份', 'warn'); return; }
+    setState('syncing', '正在解锁…');
+    decryptJSON(vault, pass).then(function (creds) {
+      creds.pass = pass;
+      session = creds;
+      return pull();
+    }).then(function () { A.closeModal(); A.toast('已解锁并合并云端数据', 'ok'); refreshAll(); })
+      .catch(function () { reportError(new Error('解锁失败：口令错误或服务异常')); A.toast('解锁失败：口令错误或服务异常', 'warn'); });
+  }
+
+  function handleChangePass(form) {
+    var np = form.querySelector('[name=np]').value;
+    var np2 = form.querySelector('[name=np2]').value;
+    if (np.length < 6) { A.toast('新口令至少 6 位', 'warn'); return; }
+    if (np !== np2) { A.toast('两次口令不一致', 'warn'); return; }
+    session.pass = np;
+    persistSession()
+      .then(function () { A.closeModal(); A.toast('口令已更新', 'ok'); renderManage(); })
+      .catch(function (e) { A.toast('更新失败：' + (e.message || e), 'warn'); });
+  }
+
+  function lock() {
+    session = null;
+    setState('locked', '已加密');
+    updatePill(); updateCard();
+    A.toast('已锁定', 'ok');
+    if (A.$('.modal-mask')) { A.closeModal(); openPanel(); }
+  }
+
+  function disconnect() {
+    A.confirmModal({
+      title: '断开云同步',
+      sub: '将清除本机保存的加密令牌，云端 Gist 不会被删除。',
+      okText: '断开并清除', danger: true
+    }, function () {
+      clearVault();
+      session = null;
+      setState('idle', '未连接');
+      refreshAll();
+      A.toast('已断开', 'ok');
+    });
+  }
+
+  /* ============================================================ 动作注册 */
+  A.ACTIONS['sync-open'] = function () { openPanel(); };
+  A.ACTIONS['sync-connect'] = function (form) { handleConnect(form); };
+  A.ACTIONS['sync-unlock'] = function (form) { handleUnlock(form); };
+  A.ACTIONS['sync-pass-submit'] = function (form) { handleChangePass(form); };
+  A.ACTIONS['sync-change-pass'] = function () { openChangePass(); };
+  A.ACTIONS['sync-lock'] = function () { lock(); };
+  A.ACTIONS['sync-disconnect'] = function () { disconnect(); };
+  A.ACTIONS['sync-toggle-auto'] = function () {
+    if (!session) { openPanel(); return; }
+    session.autoSync = !session.autoSync;
+    persistSession().then(function () {
+      A.toast('自动同步：' + (session.autoSync ? '开' : '关'));
+      if (A.$('.modal-mask')) openPanel(); else updateCard();
+    });
+  };
+  A.ACTIONS['sync-now'] = function () {
+    if (!session) { openPanel(); return; }
+    push().then(function () { A.toast('已同步', 'ok'); if (A.$('.modal-mask')) openPanel(); })
+      .catch(function (e) { A.toast('同步失败：' + (e.message || e), 'warn'); });
+  };
+
+  /* ============================================================ 启动 */
+  function init() {
+    try {
+      ensureMetaSync();
+      if (hasVault()) { state.status = 'locked'; state.message = '已加密'; }
+      else { state.status = 'idle'; state.message = '未连接'; }
+
+      // 包裹 save，实现自动同步
+      wrapSave();
+
+      // 顶栏状态 pill（renderPageActions 每次导航会重新注入）
+      var _origRPA = A.renderPageActions;
+      A.renderPageActions = function () { _origRPA(); injectPill(); };
+
+      injectPill();
+      updateCard();
+    } catch (e) { /* 绝不影响主程序 */ }
+  }
+
+  /* ============================================================ 暴露 */
+  window.Sync = {
+    init: init, push: push, pull: pull, openPanel: openPanel, lock: lock, disconnect: disconnect,
+    _t: {
+      mergeEntities: mergeEntities, mergeDays: mergeDays, mergeTimer: mergeTimer,
+      mergeStore: mergeStore, encryptJSON: encryptJSON, decryptJSON: decryptJSON,
+      cloneStore: cloneStore, buildPayload: function () { return { rev: 0 }; },
+      loadVault: loadVault, saveVault: saveVault, clearVault: clearVault, hasVault: hasVault,
+      setSession: function (s) { session = s; }, getSession: function () { return session; },
+      getState: function () { return state; }, ensureMetaSync: ensureMetaSync,
+      setState: setState, push: push, pull: pull
+    }
+  };
+
+  init();
 })();
 
 </script>
