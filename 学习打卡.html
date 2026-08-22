@@ -3283,6 +3283,70 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     return o;
   }
 
+  function normalizeData(d) {
+    d = d || {};
+    return {
+      version: d.version || 2,
+      createdAt: d.createdAt || Date.now(),
+      updatedAt: d.updatedAt || Date.now(),
+      plans: Array.isArray(d.plans) ? d.plans : [],
+      days: (d.days && typeof d.days === 'object') ? d.days : {},
+      records: Array.isArray(d.records) ? d.records : [],
+      timer: d.timer || null,
+      meta: {
+        lastOpen: (d.meta && d.meta.lastOpen) || A.today(),
+        notice: (d.meta ? (d.meta.notice || '') : ''),
+        sync: (d.meta && d.meta.sync) || { rev: 0, lastSyncAt: 0, lastPullAt: 0 }
+      }
+    };
+  }
+
+  /* 自动发现：复用账号下已有的学习打卡备份 Gist（跨设备免手动填写）
+     若发现多个旧备份，则全部合并到 rev 最高的那一个，避免数据分散丢失。 */
+  function discoverGist() {
+    return ghFetch('/gists?per_page=100').then(function (list) {
+      var cands = (list || []).filter(function (g) {
+        return g && g.files && g.files[GIST_FILENAME];
+      });
+      if (!cands.length) return null;
+      if (cands.length === 1) return cands[0].id;
+      return Promise.all(cands.map(function (g) {
+        return ghFetch('/gists/' + g.id).then(function (full) {
+          var content = full.files && full.files[GIST_FILENAME] && full.files[GIST_FILENAME].content;
+          var parsed = null;
+          try { parsed = JSON.parse(content); } catch (e) { parsed = null; }
+          return { id: g.id, rev: (parsed && parsed.rev) || 0, data: parsed ? parsed.data : null };
+        }).catch(function () { return { id: g.id, rev: -1, data: null }; });
+      })).then(function (infos) {
+        infos.sort(function (a, b) { return b.rev - a.rev; });
+        var canonical = infos[0];
+        var acc = normalizeData(canonical.data);
+        for (var i = 1; i < infos.length; i++) {
+          if (infos[i].data) acc = mergeStore(acc, normalizeData(infos[i].data));
+        }
+        var payload = {
+          schema: SCHEMA, rev: canonical.rev + 1, updatedAt: Date.now(), client: CLIENT_TAG,
+          data: {
+            version: acc.version, createdAt: acc.createdAt, updatedAt: acc.updatedAt,
+            plans: acc.plans, days: acc.days, records: acc.records, timer: acc.timer,
+            meta: { lastOpen: acc.meta.lastOpen, notice: acc.meta.notice, sync: { rev: canonical.rev + 1, lastSyncAt: Date.now(), lastPullAt: 0 } }
+          }
+        };
+        return ghFetch('/gists/' + canonical.id, {
+          method: 'PATCH',
+          body: JSON.stringify({ files: createFiles(payload) })
+        }).then(function () {
+          // 清理多余的重复备份 Gist（数据已合并到 canonical，删除其余副本）
+          var dels = infos.slice(1).map(function (info) {
+            return ghFetch('/gists/' + info.id, { method: 'DELETE' })
+              .catch(function () { /* 删除失败不影响连接 */ });
+          });
+          return Promise.all(dels).then(function () { return canonical.id; });
+        }).catch(function () { return canonical.id; });
+      });
+    }).catch(function () { return null; });
+  }
+
   /* ============================================================ 同步操作 */
   function push() {
     if (!session) return Promise.reject(new Error('尚未连接云同步'));
@@ -3474,8 +3538,8 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
         '<div class="form-row"><label class="lbl">确认口令</label>' +
         '<input class="input" type="password" name="pass2" placeholder="再次输入口令"></div>' +
         '<div class="form-row"><label class="lbl">已有备份 Gist ID（可选）</label>' +
-        '<input class="input" type="text" name="gistId" placeholder="留空则自动新建一个私有 Gist">' +
-        '<div class="hint">若之前已在其他设备创建过备份，填入那个 Gist ID 以复用同一份数据。</div></div>' +
+        '<input class="input" type="text" name="gistId" placeholder="留空则自动复用账号下的备份">' +
+        '<div class="hint">同一 GitHub 账号下会<b>自动复用</b>已有的学习打卡备份 Gist（多个旧备份会自动合并），因此电脑和手机用同一个令牌即可自动同步，无需手动填写。仅当你想指向某个特定备份时才填这里。</div></div>' +
         '<div class="form-row" style="flex-direction:row;align-items:center;gap:10px">' +
         '<label class="switch on" data-act="sync-toggle-auto" style="margin:0">自动同步</label>' +
         '<span class="hint" style="margin:0">开启后，本地改动会自动上传到云端</span></div>' +
@@ -3511,7 +3575,8 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       title: '云同步管理',
       sub: '数据已加密备份到 GitHub 私有 Gist',
       body:
-        '<div class="kv"><span>备份 Gist</span><b>' + A.esc(masked) + '</b></div>' +
+        '<div class="kv"><span>备份 Gist</span><b style="display:flex;align-items:center;gap:8px">' + A.esc(masked) +
+        '<button type="button" class="btn btn-sm" data-act="sync-copy-gist" title="复制完整 Gist ID 到剪贴板">复制</button></b></div>' +
         '<div class="kv"><span>同步状态</span><b>' + A.esc(statusText()) + '</b></div>' +
         (state.lastSyncAt ? '<div class="kv"><span>上次同步</span><b>' + fmtTime(state.lastSyncAt) + '</b></div>' : '') +
         (state.lastPullAt ? '<div class="kv"><span>上次拉取</span><b>' + fmtTime(state.lastPullAt) + '</b></div>' : '') +
@@ -3560,8 +3625,17 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     state.lastError = '';
     setState('syncing', '正在连接…');
     session = { token: token, gistId: gistId || null, autoSync: true, pass: pass };
-    persistSession()
-      .then(function () { return gistId ? validateGist().then(function (ok) { if (!ok) throw new Error('Gist ID 无效或无权限'); }) : createGist(); })
+    var p;
+    if (gistId) {
+      p = validateGist().then(function (ok) { if (!ok) throw new Error('Gist ID 无效或无权限'); });
+    } else {
+      // 自动发现：留空则复用账号下已有的备份 Gist（多份旧备份会自动合并）
+      p = discoverGist().then(function (gid) {
+        if (gid) { session.gistId = gid; return; }
+        return createGist();
+      });
+    }
+    p.then(function () { return persistSession(); })
       .then(function () { return push(); })
       .then(function () { A.closeModal(); A.toast('云同步已连接', 'ok'); refreshAll(); })
       .catch(function (e) { reportError(e); A.toast('连接失败：' + (e.message || e), 'warn'); });
@@ -3616,6 +3690,23 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 
   /* ============================================================ 动作注册 */
   A.ACTIONS['sync-open'] = function () { openPanel(); };
+  A.ACTIONS['sync-copy-gist'] = function () {
+    if (!session || !session.gistId) { A.toast('尚未连接', 'warn'); return; }
+    var id = session.gistId;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(id).then(function () { A.toast('已复制 Gist ID', 'ok'); })
+        .catch(function () { fallbackCopy(id); });
+    } else fallbackCopy(id);
+  };
+  function fallbackCopy(text) {
+    try {
+      var ta = document.createElement('textarea'); ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      A.toast('已复制 Gist ID', 'ok');
+    } catch (e) { A.toast('复制失败，请手动记录：' + text, 'warn'); }
+  }
   A.ACTIONS['sync-connect'] = function (form) { handleConnect(form); };
   A.ACTIONS['sync-unlock'] = function (form) { handleUnlock(form); };
   A.ACTIONS['sync-pass-submit'] = function (form) { handleChangePass(form); };
