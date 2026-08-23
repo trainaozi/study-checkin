@@ -3,6 +3,7 @@
 一个**纯静态、离线可用**的学习打卡网站，全部 HTML / CSS / JS 及 Chart.js 依赖都内联在单个 HTML 文件中，断网也能用。
 
 > 直接部署在 GitHub Pages 上，可免费在线访问。
+访问链接：`https://trainaozi.github.io/study-checkin/`
 
 ## 功能特性
 
@@ -19,7 +20,7 @@
 ## 使用方法
 
 - **本地使用**：直接用浏览器打开 `index.html`（或 `学习打卡.html`）即可，无需任何服务器。
-- **在线访问**：部署到 GitHub Pages 后，通过 `https://<用户名>.github.io/study-checkin/` 打开。
+- **在线访问**：通过 `https://trainaozi.github.io/study-checkin/` 打开。
 
 ## 数据存储说明（重要）
 
