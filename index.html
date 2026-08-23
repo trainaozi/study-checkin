@@ -1045,6 +1045,9 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       days: {},
       records: [],
       timer: null,
+      /* 删除墓碑：{ plans: {id: 删除时间}, records: {id: 删除时间} }
+         用于云同步传播删除操作，防止被云端旧数据复活 */
+      tombstones: { plans: {}, records: {} },
       meta: { lastOpen: today(), notice: '' }
     };
   }
@@ -1054,6 +1057,16 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   function asText(v, max) {
     var s = (v === null || v === undefined) ? '' : String(v);
     return max ? s.slice(0, max) : s;
+  }
+  /** 归一化墓碑表：{id: 时间戳}，丢弃非法值 */
+  function tombMap(v) {
+    var out = {};
+    v = asObject(v);
+    Object.keys(v).forEach(function (k) {
+      var n = Number(v[k]);
+      if (n > 0) out[k] = n;
+    });
+    return out;
   }
 
   function sanitizePlan(p) {
@@ -1169,6 +1182,11 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       if (/^\d{4}-\d{2}-\d{2}$/.test(k)) store.days[k] = sanitizeDay(days[k], k);
     });
     store.timer = sanitizeTimer(data.timer);
+    var tombs = asObject(data.tombstones);
+    store.tombstones = {
+      plans: tombMap(tombs.plans),
+      records: tombMap(tombs.records)
+    };
     return store;
   }
 
@@ -1228,6 +1246,13 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     text = asText(text, 600).trim();
     if (text) d.focus[planId] = text; else delete d.focus[planId];
     saveStore();
+  }
+
+  /** 记录删除墓碑：同步时据此在云端传播删除，避免被旧数据复活 */
+  function markDeleted(kind, id) {
+    if (!store.tombstones) store.tombstones = { plans: {}, records: {} };
+    if (!store.tombstones[kind]) store.tombstones[kind] = {};
+    store.tombstones[kind][id] = Date.now();
   }
 
   function planAppliesTo(plan, key) {
@@ -1594,7 +1619,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     isTimeStr: isTimeStr, timeToMin: timeToMin, masteryInfo: masteryInfo, colorFor: colorFor,
     // 数据
     store: store, save: saveStore, storageOK: storageOK,
-    ensureDay: ensureDay, focusOf: focusOf, setFocus: setFocus,
+    ensureDay: ensureDay, focusOf: focusOf, setFocus: setFocus, markDeleted: markDeleted,
     planAppliesTo: planAppliesTo, plansOfDay: plansOfDay, planById: planById,
     recordsOfDay: recordsOfDay, recordsOfTask: recordsOfTask, durationOfTask: durationOfTask,
     isTaskDone: isTaskDone, totalDuration: totalDuration, subjectsAll: subjectsAll,
@@ -2727,6 +2752,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       sub: p.subject + ' · ' + p.task,
       body: '<div class="card-desc">已产生的 ' + cnt + ' 条打卡记录会保留在历史记录中，不会被删除。</div>'
     }, function () {
+      A.markDeleted('plans', id); // 记录删除墓碑，云同步时传播删除
       S.plans = S.plans.filter(function (x) { return x.id !== id; });
       if (S.timer && S.timer.planId === id) A.clearTimer();
       A.save();
@@ -2876,6 +2902,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   ACT['rec-delete'] = function (n) {
     var id = n.getAttribute('data-id');
     A.confirmModal({ title: '删除这条打卡记录？', danger: true, okText: '删除', sub: '删除后统计数据会同步变化' }, function () {
+      A.markDeleted('records', id); // 记录删除墓碑，云同步时传播删除
       S.records = S.records.filter(function (r) { return r.id !== id; });
       A.save();
       A.renderNav();
@@ -3124,7 +3151,21 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   /* ============================================================ 合并 */
   function entStamp(e) { return Number(e.updatedAt) || Number(e.createdAt) || 0; }
 
-  function mergeEntities(a, b) {
+  /** 墓碑表合并：{id: 时间戳}，取较新 */
+  function mergeTomb(a, b) {
+    var out = {};
+    a = a || {}; b = b || {};
+    Object.keys(a).forEach(function (k) { var n = Number(a[k]) || 0; if (n > 0) out[k] = n; });
+    Object.keys(b).forEach(function (k) {
+      var n = Number(b[k]) || 0;
+      if (n > 0 && (!out[k] || n > out[k])) out[k] = n;
+    });
+    return out;
+  }
+
+  /** 实体合并（带墓碑）：任一侧墓碑若比实体更新时间更新 → 实体视为已删除，从结果剔除 */
+  function mergeEntities(a, b, ta, tb) {
+    ta = ta || {}; tb = tb || {};
     var map = {};
     (a || []).forEach(function (e) { if (e && e.id) map[e.id] = e; });
     (b || []).forEach(function (e) {
@@ -3133,7 +3174,10 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       if (!cur) map[e.id] = e;
       else if (entStamp(e) >= entStamp(cur)) map[e.id] = e;
     });
-    return Object.keys(map).map(function (k) { return map[k]; });
+    return Object.keys(map).filter(function (k) {
+      var ts = Math.max(ta[k] || 0, tb[k] || 0);
+      return !ts || ts <= entStamp(map[k]); // 无墓碑，或实体比墓碑更新（删除后重建）→ 保留
+    }).map(function (k) { return map[k]; });
   }
 
   function mergeDays(a, b) {
@@ -3170,14 +3214,20 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   }
 
   function mergeStore(local, remote) {
+    local = local || {}; remote = remote || {};
+    var lt = local.tombstones || {}, rt = remote.tombstones || {};
     return {
       version: Math.max(local.version || 2, remote.version || 2),
       createdAt: Math.min(local.createdAt || Date.now(), remote.createdAt || Date.now()),
       updatedAt: Date.now(),
-      plans: mergeEntities(local.plans, remote.plans),
-      records: mergeEntities(local.records, remote.records),
+      plans: mergeEntities(local.plans, remote.plans, lt.plans, rt.plans),
+      records: mergeEntities(local.records, remote.records, lt.records, rt.records),
       days: mergeDays(local.days, remote.days),
       timer: mergeTimer(local.timer, remote.timer),
+      tombstones: {
+        plans: mergeTomb(lt.plans, rt.plans),
+        records: mergeTomb(lt.records, rt.records)
+      },
       meta: Object.assign({}, local.meta || {}, remote.meta || {})
     };
   }
@@ -3185,7 +3235,9 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   function cloneStore(s) {
     return JSON.parse(JSON.stringify({
       version: s.version, createdAt: s.createdAt, updatedAt: s.updatedAt,
-      plans: s.plans, days: s.days, records: s.records, timer: s.timer, meta: s.meta
+      plans: s.plans, days: s.days, records: s.records, timer: s.timer,
+      tombstones: s.tombstones || { plans: {}, records: {} },
+      meta: s.meta
     }));
   }
 
@@ -3199,6 +3251,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     return {
       version: s.version, createdAt: s.createdAt, updatedAt: s.updatedAt,
       plans: [], days: {}, records: [], timer: null,
+      tombstones: { plans: {}, records: {} },
       meta: { lastOpen: A.today(), notice: '', sync: { rev: 0, lastSyncAt: 0, lastPullAt: 0 } }
     };
   }
@@ -3215,6 +3268,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     s.records = merged.records;
     s.days = merged.days;
     s.timer = merged.timer;
+    s.tombstones = merged.tombstones || { plans: {}, records: {} };
     s.version = merged.version || s.version;
     s.createdAt = merged.createdAt || s.createdAt;
     s.updatedAt = merged.updatedAt || s.updatedAt;
@@ -3293,6 +3347,10 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       days: (d.days && typeof d.days === 'object') ? d.days : {},
       records: Array.isArray(d.records) ? d.records : [],
       timer: d.timer || null,
+      tombstones: {
+        plans: (d.tombstones && d.tombstones.plans) || {},
+        records: (d.tombstones && d.tombstones.records) || {}
+      },
       meta: {
         lastOpen: (d.meta && d.meta.lastOpen) || A.today(),
         notice: (d.meta ? (d.meta.notice || '') : ''),
@@ -3329,6 +3387,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
           data: {
             version: acc.version, createdAt: acc.createdAt, updatedAt: acc.updatedAt,
             plans: acc.plans, days: acc.days, records: acc.records, timer: acc.timer,
+            tombstones: acc.tombstones || { plans: {}, records: {} },
             meta: { lastOpen: acc.meta.lastOpen, notice: acc.meta.notice, sync: { rev: canonical.rev + 1, lastSyncAt: Date.now(), lastPullAt: 0 } }
           }
         };
@@ -3373,6 +3432,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
         data: {
           version: merged.version, createdAt: merged.createdAt, updatedAt: merged.updatedAt,
           plans: merged.plans, days: merged.days, records: merged.records, timer: merged.timer,
+          tombstones: merged.tombstones || { plans: {}, records: {} },
           meta: {
             lastOpen: (merged.meta && merged.meta.lastOpen) || A.today(),
             notice: (merged.meta && merged.meta.notice) || '',
@@ -3750,7 +3810,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   window.Sync = {
     init: init, push: push, pull: pull, openPanel: openPanel, lock: lock, disconnect: disconnect,
     _t: {
-      mergeEntities: mergeEntities, mergeDays: mergeDays, mergeTimer: mergeTimer,
+      mergeEntities: mergeEntities, mergeTomb: mergeTomb, mergeDays: mergeDays, mergeTimer: mergeTimer,
       mergeStore: mergeStore, encryptJSON: encryptJSON, decryptJSON: decryptJSON,
       cloneStore: cloneStore, buildPayload: function () { return { rev: 0 }; },
       loadVault: loadVault, saveVault: saveVault, clearVault: clearVault, hasVault: hasVault,

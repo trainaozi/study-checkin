@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习打卡 · 云同步使用说明</title>
+<style>
+  :root {
+    --primary: #5eb89e; --primary-dark: #3d9b7e; --primary-soft: rgba(94,184,158,.12);
+    --accent: #f4a261; --accent-ink: #b56b1f;
+    --secondary: #e76f51; --secondary-ink: #c44530;
+    --ink: #2d3436; --ink-2: #555; --muted: #888;
+    --line: #eee; --bg: #f8f9fa; --card: #fff;
+    --radius: 14px; --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
+    --shadow: 0 4px 16px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.7; padding: 0;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 28px; margin-bottom: 8px; color: var(--primary-dark); }
+  .sub { color: var(--muted); font-size: 15px; margin-bottom: 32px; }
+  h2 {
+    font-size: 20px; margin: 36px 0 16px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--primary-soft); color: var(--ink);
+    display: flex; align-items: center; gap: 8px;
+  }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--primary); color: #fff; font-size: 15px; flex-shrink: 0;
+  }
+  h3 { font-size: 16px; margin: 20px 0 10px; color: var(--ink-2); }
+  p { margin-bottom: 12px; color: var(--ink-2); }
+  .card {
+    background: var(--card); border-radius: var(--radius);
+    padding: 20px 24px; margin-bottom: 16px; box-shadow: var(--shadow-sm);
+    border: 1px solid var(--line);
+  }
+  .card.primary { border-left: 4px solid var(--primary); }
+  .card.warn { border-left: 4px solid var(--accent); background: #fffbf5; }
+  .card.danger { border-left: 4px solid var(--secondary); background: #fef5f3; }
+  .card.ok { border-left: 4px solid var(--primary); background: #f0faf6; }
+  ul, ol { margin: 8px 0 16px 20px; }
+  li { margin-bottom: 6px; color: var(--ink-2); }
+  code {
+    background: var(--primary-soft); color: var(--primary-dark);
+    padding: 2px 7px; border-radius: 5px; font-size: 13px;
+    font-family: "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  .kbd {
+    display: inline-block; padding: 2px 8px; border: 1px solid var(--line);
+    border-radius: 5px; background: #fff; font-size: 13px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05); color: var(--ink);
+  }
+  .step {
+    display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start;
+  }
+  .step-icon {
+    flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--primary); color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-body p { margin-bottom: 6px; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+  }
+  .tag-pc { background: var(--primary-soft); color: var(--primary-dark); }
+  .tag-mobile { background: #fff0e6; color: var(--accent-ink); }
+  .tag-both { background: #e8eaf6; color: #3949ab; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { background: var(--bg); color: var(--ink); font-weight: 600; }
+  .toc {
+    background: var(--card); border-radius: var(--radius); padding: 20px 28px;
+    margin-bottom: 32px; box-shadow: var(--shadow-sm); border: 1px solid var(--line);
+  }
+  .toc h3 { margin: 0 0 10px; font-size: 15px; color: var(--muted); }
+  .toc ol { margin: 0 0 0 20px; }
+  .toc li { margin-bottom: 4px; }
+  .toc a { color: var(--primary-dark); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .faq-q { font-weight: 600; color: var(--ink); margin: 16px 0 6px; }
+  .faq-a { color: var(--ink-2); margin-bottom: 14px; }
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); text-align: center; color: var(--muted); font-size: 13px; }
+  @media (max-width: 600px) {
+    .wrap { padding: 24px 16px 60px; }
+    h1 { font-size: 23px; }
+    h2 { font-size: 18px; }
+    .card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>学习打卡 · 云同步使用说明</h1>
+  <p class="sub">GitHub Gist 加密备份 · 跨设备数据同步 · 详细图文指南</p>
+
+  <div class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#how">云同步是什么？怎么工作的？</a></li>
+      <li><a href="#token">创建 GitHub 访问令牌（Token）</a></li>
+      <li><a href="#first">第一台设备（如电脑）首次连接</a></li>
+      <li><a href="#second">第二台设备（如手机）连接同步</a></li>
+      <li><a href="#daily">日常使用：自动同步与手动同步</a></li>
+      <li><a href="#manage">管理：锁定 / 更改口令 / 断开</a></li>
+      <li><a href="#troubleshoot">常见问题排查</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ 1 -->
+  <h2 id="how"><span class="num">1</span> 云同步是什么？怎么工作的？</h2>
+  <div class="card primary">
+    <p><b>一句话概括：</b>把你的打卡数据加密备份到你自己的 GitHub 私有 Gist 里，换设备后输入同样的令牌就能自动拉取合并。</p>
+  </div>
+  <h3>工作原理</h3>
+  <div class="card">
+    <p>你的打卡数据平时存在<b>浏览器本地</b>（localStorage）。开启云同步后：</p>
+    <ul>
+      <li>数据会被上传到你 GitHub 账号下的一个<b>私有 Gist</b>（只有你自己能看）</li>
+      <li>你的 GitHub 令牌会用你设置的<b>同步口令</b>加密后存在本地，不会明文落地</li>
+      <li>换设备时，输入<b>同一个 GitHub 令牌 + 同一个口令</b>，就会自动找到同一份备份并合并</li>
+      <li>每次同步都会自动<b>合并</b>本地与云端的数据（按时间戳取较新版本），不会互相覆盖</li>
+    </ul>
+  </div>
+  <div class="card ok">
+    <p><b>关键点：电脑和手机用「同一个 GitHub 令牌」连接即可自动同步</b>，不需要手动抄 Gist ID。程序会自动在你账号下找到已有的备份并复用。</p>
+  </div>
+
+  <!-- ============================================================ 2 -->
+  <h2 id="token"><span class="num">2</span> 创建 GitHub 访问令牌（Token）</h2>
+  <p>云同步只需要一个带 <code>gist</code> 权限的令牌，创建一次，双端通用。</p>
+  <div class="card">
+    <div class="step">
+      <div class="step-icon">1</div>
+      <div class="step-body">
+        <p>打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a>（需先登录 GitHub）</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">2</div>
+      <div class="step-body">
+        <p>点击 <b>Generate new token (classic)</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">3</div>
+      <div class="step-body">
+        <p><b>Note</b> 填 <code>study-checkin</code>（随便写，自己认得就行）</p>
+        <p><b>Expiration</b> 建议选 <b>No expiration</b>（永不过期）或 <b>1 year</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">4</div>
+      <div class="step-body">
+        <p><b>只勾选 <code>gist</code></b> 这一项（在权限列表里找到 <code>gist</code>，勾上前面的方框）</p>
+        <p style="color:var(--secondary-ink)"><b>不要勾其他权限</b>，越少越安全。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">5</div>
+      <div class="step-body">
+        <p>拉到底点 <b>Generate token</b>，复制 <code>ghp_</code> 开头的那串字符</p>
+      </div>
+    </div>
+  </div>
+  <div class="card warn">
+    <p><b>这串令牌就是你的"钥匙"，电脑和手机都用同一把。</b> 复制好之后保管好，GitHub 关闭页面后就看不到了（但可以随时重新生成）。</p>
+  </div>
+
+  <!-- ============================================================ 3 -->
+  <h2 id="first"><span class="num">3</span> 第一台设备（如电脑）首次连接</h2>
+  <p><span class="tag tag-pc">电脑</span> <span class="tag tag-mobile">手机</span> 操作完全一样，以下以电脑为例。</p>
+  <div class="card">
+    <div class="step">
+      <div class="step-icon">1</div>
+      <div class="step-body"><p>打开 <a href="https://trainaozi.github.io/study-checkin/" target="_blank">学习打卡网站</a></p></div>
+    </div>
+    <div class="step">
+      <div class="step-icon">2</div>
+      <div class="step-body"><p>进入<b>「历史记录」</b>页面（左侧导航或底部 Tab 的最后一个）</p></div>
+    </div>
+    <div class="step">
+      <div class="step-icon">3</div>
+      <div class="step-body">
+        <p>页面往下拉，找到<b>「云同步 · 跨设备备份」</b>卡片，点击<b>「打开云同步」</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">4</div>
+      <div class="step-body">
+        <p>在弹出的窗口中填写：</p>
+        <ul>
+          <li><b>GitHub 访问令牌</b>：粘贴刚才复制的 <code>ghp_xxx</code></li>
+          <li><b>同步口令</b>：自己设一个口令（至少 6 位），用于加密令牌。<b>记住它</b>，遗忘了无法恢复</li>
+          <li><b>确认口令</b>：再输一遍</li>
+          <li><b>已有备份 Gist ID</b>：<b>留空</b>（留空会自动在你账号下创建/复用备份）</li>
+          <li><b>自动同步</b>：保持开启（推荐）</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">5</div>
+      <div class="step-body">
+        <p>点<b>「保存并连接」</b>，等待几秒。看到右上角出现 <code>☁ 已同步</code> 的绿色提示就成功了。</p>
+      </div>
+    </div>
+  </div>
+  <div class="card ok">
+    <p>此时你的打卡数据已上传到云端。右上角的同步状态 pill 会持续显示同步状态。</p>
+  </div>
+
+  <!-- ============================================================ 4 -->
+  <h2 id="second"><span class="num">4</span> 第二台设备（如手机）连接同步</h2>
+  <p><span class="tag tag-mobile">手机</span> <span class="tag tag-pc">电脑</span> 第二台设备用<b>同一个令牌 + 同一个口令</b>连接即可。</p>
+  <div class="card">
+    <div class="step">
+      <div class="step-icon">1</div>
+      <div class="step-body"><p>在手机浏览器打开同一个网站链接</p></div>
+    </div>
+    <div class="step">
+      <div class="step-icon">2</div>
+      <div class="step-body"><p>进入<b>「历史记录」</b> → 找到<b>「云同步」</b>卡片 → 点<b>「打开云同步」</b></p></div>
+    </div>
+    <div class="step">
+      <div class="step-icon">3</div>
+      <div class="step-body">
+        <p>填写<b>完全相同</b>的信息：</p>
+        <ul>
+          <li><b>GitHub 访问令牌</b>：和第一台<b>同一个</b> <code>ghp_xxx</code></li>
+          <li><b>同步口令</b>：和第一台<b>同一个</b>口令</li>
+          <li><b>确认口令</b>：再输一遍</li>
+          <li><b>已有备份 Gist ID</b>：<b>留空</b>（会自动找到第一台创建的备份）</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">4</div>
+      <div class="step-body">
+        <p>点<b>「保存并连接」</b>，程序会自动发现你账号下已有的备份，拉取数据并<b>合并</b>到本机。</p>
+      </div>
+    </div>
+  </div>
+  <div class="card ok">
+    <p>连接成功后，手机上的数据就和电脑同步了。之后任一端新增打卡，另一端点「立即同步」或等自动同步即可更新。</p>
+  </div>
+
+  <div class="card warn">
+    <p><b>为什么之前双端不同步？</b></p>
+    <p>旧版本在「Gist ID 留空」时会为每台设备<b>各新建一个独立的 Gist</b>，导致电脑写自己的、手机写自己的，永不相遇。<b>新版本已修复</b>：留空时会自动在你账号下查找已有备份并复用，多台设备指向同一份数据。</p>
+    <p>如果你之前已经连过了，需要<b>先断开再重新连接</b>（见第 6 节），新逻辑才会生效。</p>
+  </div>
+
+  <!-- ============================================================ 5 -->
+  <h2 id="daily"><span class="num">5</span> 日常使用</h2>
+  <h3>自动同步（推荐）</h3>
+  <div class="card">
+    <p>开启自动同步后，每次你新增计划、完成打卡、修改数据，程序会在 2.5 秒后自动上传到云端。右上角 pill 会短暂显示 <code>同步中…</code>，完成后变回 <code>已同步</code>。</p>
+    <p>你不需要做任何操作，正常用就行。</p>
+  </div>
+  <h3>手动同步</h3>
+  <div class="card">
+    <p>如果想立刻拉取另一台设备的最新数据：</p>
+    <ul>
+      <li>点击右上角同步状态 pill，或进入「历史记录 → 云同步」卡片</li>
+      <li>点<b>「立即同步」</b>按钮</li>
+      <li>程序会先拉取云端最新数据合并到本地，再把合并结果上传</li>
+    </ul>
+  </div>
+  <h3>解锁</h3>
+  <div class="card">
+    <p>关闭页面后再打开，令牌会处于<b>加密锁定</b>状态（右上角显示 <code>🔒 已加密</code>）。需要输入同步口令解锁后才能同步。</p>
+    <p>解锁后会自动拉取一次云端数据并合并。</p>
+  </div>
+
+  <!-- ============================================================ 6 -->
+  <h2 id="manage"><span class="num">6</span> 管理</h2>
+  <p>点击右上角同步 pill 或「云同步」卡片的「打开」按钮，进入管理面板。</p>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>立即同步</td><td>手动触发一次 上传 + 拉取合并</td></tr>
+    <tr><td>自动同步 开关</td><td>开关本地改动是否自动上传</td></tr>
+    <tr><td>更改口令</td><td>用新口令重新加密本地令牌（云端数据不变）</td></tr>
+    <tr><td>锁定</td><td>清除当前会话的令牌，需重新输入口令才能同步</td></tr>
+    <tr><td>断开并清除</td><td>清除本机保存的加密令牌（云端 Gist 不删除，数据仍在）</td></tr>
+    <tr><td>复制 Gist ID</td><td>复制完整备份 ID，用于手动指定备份（一般不需要）</td></tr>
+  </table>
+  <div class="card warn">
+    <p><b>如果你之前遇到了双端不同步的问题，修复后的正确操作是：</b></p>
+    <ol>
+      <li>在<b>两台设备</b>上都进入云同步管理面板，点<b>「断开并清除」</b></li>
+      <li>在第一台设备重新连接（令牌 + 口令，Gist ID 留空）</li>
+      <li>在第二台设备重新连接（<b>同样的</b>令牌 + 口令，Gist ID 留空）</li>
+      <li>程序会自动找到同一个备份，数据合并后双端同步</li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ 7 -->
+  <h2 id="troubleshoot"><span class="num">7</span> 常见问题排查</h2>
+
+  <div class="faq-q">Q：连接时提示「GitHub 令牌无效或权限不足」</div>
+  <div class="faq-a">
+    A：检查令牌是否：<br>
+    ① 以 <code>ghp_</code> 或 <code>github_pat_</code> 开头，复制完整无多余空格；<br>
+    ② 勾选了 <code>gist</code> 权限；<br>
+    ③ 没有过期（在 token 页面看 Expiration 列）。
+  </div>
+
+  <div class="faq-q">Q：解锁时提示「口令错误」</div>
+  <div class="faq-a">
+    A：同步口令是你连接时自己设的，和 GitHub 密码无关。如果真忘了，只能点「断开并清除」后重新连接（会创建新备份，旧数据仍在云端 Gist 里）。
+  </div>
+
+  <div class="faq-q">Q：两台设备都连上了，但数据还是不同步</div>
+  <div class="faq-a">
+    A：确认两点：<br>
+    ① 两台设备用的是<b>同一个</b> GitHub 令牌（不是各建各的）；<br>
+    ② 网站已更新到修复后的版本——进入「云同步」连接弹窗，看「已有备份 Gist ID」下面的提示是否写了「自动复用账号下的备份」。如果是旧的提示文字，说明网站还没更新，需要清除浏览器缓存或等 GitHub Pages 刷新。<br>
+    ③ 如果之前各连过一次，需要<b>双端都先断开再重连</b>（见第 6 节）。
+  </div>
+
+  <div class="faq-q">Q：手机上输入令牌很不方便，能跳过吗？</div>
+  <div class="faq-a">
+    A：令牌只需要输入一次（加密后存本地）。之后每次只需输入口令解锁即可。建议把令牌存在密码管理器里，或写入备忘录。
+  </div>
+
+  <div class="faq-q">Q：自动同步会不会很费流量？</div>
+  <div class="faq-a">
+    A：每次同步只传一个小 JSON（通常几 KB），且只在数据变化后 2.5 秒触发一次。日常使用几乎无感。
+  </div>
+
+  <div class="faq-q">Q：换浏览器或清缓存后数据丢了怎么办？</div>
+  <div class="faq-a">
+    A：只要之前开过云同步，重新打开网站 → 连接云同步（同一令牌 + 口令）→ 自动拉取合并即可恢复。
+  </div>
+
+  <div class="faq-q">Q：安全吗？令牌会不会泄露？</div>
+  <div class="faq-a">
+    A：令牌用 Web Crypto（AES-GCM + PBKDF2 20 万次迭代）加密后存在浏览器本地，不经过任何服务器传输。同步口令只在当前页面会话内存中，关闭即消失。云端 Gist 是私有的，只有你的令牌能访问。
+  </div>
+
+  <div class="footer">
+    学习打卡 · Study Check-in &nbsp;|&nbsp; <a href="https://trainaozi.github.io/study-checkin/">在线访问</a> &nbsp;|&nbsp; 纯前端 · 离线可用 · 数据自持
+  </div>
+</div>
+</body>
+</html>
