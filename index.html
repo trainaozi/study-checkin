@@ -2952,33 +2952,21 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
       body: '<div class="card-desc">将删除 ' + S.records.length + ' 条打卡记录、' + S.plans.length +
         ' 条计划与全部归档，且无法撤销。建议先「备份 JSON」。</div>'
     }, function () {
-      // 原地重置内存中的全部数据（不再刷新页面）。
-      // 说明：旧实现会在 removeItem 后 location.reload()，刷新时云同步模块
-      // 检测到本地仍留有加密令牌(vault)会进入“已加密/锁定”状态，随后用户解锁
-      // 会触发 pull() 把云端旧数据拉回合并，导致“一键清空”失效。
-      // 这里改为就地清空并保存：不刷新 -> 云同步不会被强制锁定；
-      // 若已连接云同步，A.save() 的自动同步会把空状态推到云端，旧数据一并清除。
+      // 仅清空内存中的全部数据并重渲染界面，不再刷新页面。
+      // 旧实现在移除数据后会 location.reload()，刷新会使云同步模块进入“锁定”状态，
+      // 用户解锁后又把云端旧数据拉回，导致“一键清空”失效。
+      // 注意：此处不要调用 A.save()，否则会自动触发云同步 push()，
+      // 而 push() 会把“本地空状态”与“云端旧数据”合并、再把旧数据写回，使清空失效。
       if (A.clearTimer) A.clearTimer();
-      S.version = 2;
-      S.createdAt = Date.now();
-      S.updatedAt = Date.now();
       S.plans = [];
       S.records = [];
       S.days = {};
       S.timer = null;
       S.tombstones = { plans: {}, records: {} };
-      S.meta = { lastOpen: A.today(), notice: '' };
       try { localStorage.removeItem(A.STORE_KEY); } catch (e) { }
-      A.save();
       A.renderNav();
       if (A.navigate) A.navigate();
       A.toast('数据已清空', 'ok');
-      // 已连接云同步时，立即把空状态推送到云端，确保旧数据彻底清除
-      try {
-        if (window.Sync && window.Sync._t && window.Sync._t.getSession && window.Sync._t.getSession()) {
-          window.Sync.push().catch(function () { });
-        }
-      } catch (e) { /* 云端清除失败不影响本地清空 */ }
     });
   };
   ACT['goto-timer'] = function () { location.hash = '#/checkin'; };
