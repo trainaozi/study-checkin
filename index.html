@@ -1123,6 +1123,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var p = s.split(':');
     return Number(p[0]) * 60 + Number(p[1]);
   }
+  /* ============================================================
+     完成度统一按「时间占比」计算：
+       完成度 = 已完成计划/小节所需时间 ÷ 全部计划/小节所需时间 × 100%
+     计划未设置有效时段时，按 DEFAULT_PLAN_MINUTES 默认权重计入（分钟），
+     保证各页面完成度统计有统一基准、口径一致。
+     ============================================================ */
+  var DEFAULT_PLAN_MINUTES = 60;
+  /** 单个计划的「所需时间」（分钟）。优先取计划时段 endTime−startTime；无效/缺失时用默认权重。 */
+  function planRequiredMin(plan) {
+    plan = plan || {};
+    var a = timeToMin(plan.startTime), b = timeToMin(plan.endTime);
+    var diff = b - a;
+    if (diff >= 1 && diff <= 24 * 60) return diff; // 有效时段：1 分钟 ~ 24 小时
+    return DEFAULT_PLAN_MINUTES;
+  }
+  /** 时间占比完成度：返回保留一位小数的百分比数值（0~100）。无总时长时返回 0。 */
+  function completionPct(doneMin, totalMin) {
+    totalMin = Number(totalMin) || 0;
+    doneMin = Number(doneMin) || 0;
+    if (totalMin <= 0) return 0;
+    return Math.round(doneMin / totalMin * 1000) / 10;
+  }
   function masteryInfo(v) {
     v = clamp(Math.round(Number(v) || 0), 1, 5);
     return MASTERY[v - 1];
@@ -1550,7 +1572,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return dates.sort();
   }
   function isSectionDone(secId) { return sectionDoneDates(secId).length > 0; }
-  /** 章节计划整体完成进度：每章 {id,title,total,done,sections:[{id,title,estMin,done,lastDate}]} */
+  /** 章节计划整体完成进度：每章 {id,title,total,done,totalMin,doneMin,pct,sections:[{id,title,estMin,done,lastDate}]}
+      pct 为按小节 estMin 的时间占比完成度（一位小数百分比）。 */
   function chaptersProgress() {
     return store.chapters.map(function (ch) {
       var secs = ch.sections.map(function (s) {
@@ -1558,7 +1581,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         return { id: s.id, title: s.title, estMin: s.estMin, done: dates.length > 0, lastDate: dates[dates.length - 1] || '' };
       });
       var done = secs.filter(function (s) { return s.done; }).length;
-      return { id: ch.id, title: ch.title, total: secs.length, done: done, sections: secs };
+      var totalMin = secs.reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
+      var doneMin = secs.filter(function (s) { return s.done; }).reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
+      return { id: ch.id, title: ch.title, total: secs.length, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), sections: secs };
     });
   }
   /** 导入章节里出现的学科名（去重升序） */
@@ -1567,8 +1592,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     store.chapters.forEach(function (ch) { set[ch.subject || '未分类'] = 1; });
     return Object.keys(set).sort();
   }
-  /** 学科 → 大章 → 小节 分层完成进度。
-      返回 [{subject,total,done,chapters:[{id,title,total,done,sections:[...]}]}] */
+  /** 学科 → 大章 → 小节 分层完成进度（时间占比）。
+      返回 [{subject,total,done,totalMin,doneMin,pct,chapters:[{id,title,total,done,totalMin,doneMin,pct,sections:[...]}]}] */
   function subjectsProgress() {
     return subjectsOfChapters().map(function (subj) {
       var chaps = store.chapters
@@ -1579,11 +1604,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
             return { id: s.id, title: s.title, estMin: s.estMin, done: dates.length > 0, lastDate: dates[dates.length - 1] || '' };
           });
           var done = secs.filter(function (s) { return s.done; }).length;
-          return { id: ch.id, title: ch.title, total: secs.length, done: done, sections: secs };
+          var totalMin = secs.reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
+          var doneMin = secs.filter(function (s) { return s.done; }).reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
+          return { id: ch.id, title: ch.title, total: secs.length, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), sections: secs };
         });
       var total = chaps.reduce(function (a, c) { return a + c.total; }, 0);
       var done = chaps.reduce(function (a, c) { return a + c.done; }, 0);
-      return { subject: subj, total: total, done: done, chapters: chaps };
+      var totalMin = chaps.reduce(function (a, c) { return a + c.totalMin; }, 0);
+      var doneMin = chaps.reduce(function (a, c) { return a + c.doneMin; }, 0);
+      return { subject: subj, total: total, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), chapters: chaps };
     });
   }
 
@@ -1961,6 +1990,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     weekdayOf: weekdayOf, fmtDateCN: fmtDateCN, fmtDateFull: fmtDateFull, relDayLabel: relDayLabel,
     fmtDur: fmtDur, fmtClock: fmtClock, minutesOf: minutesOf, fmtTimeOfDay: fmtTimeOfDay,
     isTimeStr: isTimeStr, timeToMin: timeToMin, masteryInfo: masteryInfo, colorFor: colorFor,
+    // 完成度（时间占比）
+    DEFAULT_PLAN_MINUTES: DEFAULT_PLAN_MINUTES, planRequiredMin: planRequiredMin, completionPct: completionPct,
     // 数据
     store: store, save: saveStore, loadStoreObject: loadStoreObject, storageOK: storageOK,
     ensureDay: ensureDay, focusOf: focusOf, setFocus: setFocus, markDeleted: markDeleted,
@@ -2068,7 +2099,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<circle class="ring-bg" cx="58" cy="58" r="' + r + '" fill="none" stroke-width="10"/>' +
       '<circle class="ring-fg" cx="58" cy="58" r="' + r + '" fill="none" stroke-width="10" ' +
       'stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/>' +
-      '</svg><div class="ring-center"><b>' + Math.round(pct) + '%</b><span>' + esc(label || '完成度') + '</span></div></div>';
+      '</svg><div class="ring-center"><b>' + Number(pct).toFixed(1) + '%</b><span>' + esc(label || '完成度') + '</span></div></div>';
   }
   function timeRangeHTML(start, end) {
     return '<span class="time-chip start">' + ic('ic-clock', 12) + esc(start) + '</span>' +
@@ -2098,7 +2129,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var plans = A.plansOfDay(t);
     var recs = A.recordsOfDay(t);
     var doneCount = plans.filter(function (p) { return A.isTaskDone(t, p.id); }).length;
-    var pct = plans.length ? doneCount / plans.length * 100 : 0;
+    // 时间占比完成度：已完成计划的时段时长 ÷ 全部计划的时段时长
+    var totalMin = plans.reduce(function (s, p) { return s + A.planRequiredMin(p); }, 0);
+    var doneMin = plans.filter(function (p) { return A.isTaskDone(t, p.id); })
+      .reduce(function (s, p) { return s + A.planRequiredMin(p); }, 0);
+    var pct = A.completionPct(doneMin, totalMin);
     var todaySec = A.totalDuration(recs);
     var ws = A.weekStart(t);
     var weekRecs = S.records.filter(function (r) { return r.date >= ws && r.date <= t; });
@@ -2156,8 +2191,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<div style="flex:1;min-width:180px">' +
       '<div style="font-size:19px;font-weight:700">' + esc(greet) + '，今天是 ' + esc(A.fmtDateCN(t)) + '</div>' +
       '<div class="card-desc" style="margin-top:6px;line-height:1.7">' +
-      '今日安排 <b style="color:var(--primary-dark)">' + plans.length + '</b> 项，已完成 <b style="color:var(--primary-dark)">' + doneCount + '</b> 项' +
-      (plans.length - doneCount > 0 ? '，还剩 <b style="color:var(--secondary-ink)">' + (plans.length - doneCount) + '</b> 项' : '') +
+      '今日安排 <b style="color:var(--primary-dark)">' + plans.length + '</b> 项 · 计划总时长 <b style="color:var(--primary-dark)">' + A.fmtDur(totalMin * 60) + '</b><br>' +
+      '已按计划时长完成 <b style="color:var(--primary-dark)">' + pct.toFixed(1) + '%</b>（约 ' + A.fmtDur(doneMin * 60) + '）' +
+      (plans.length - doneCount > 0 ? '，还剩 <b style="color:var(--secondary-ink)">' + (plans.length - doneCount) + '</b> 项未打卡' : '') +
       '<br>累计专注 <b style="color:var(--primary-dark)">' + A.fmtDur(todaySec) + '</b></div>' +
       '<div class="chip-row" style="margin-top:14px">' +
       '<a class="btn btn-primary btn-sm" href="#/checkin">' + ic('ic-play', 14) + '去打卡</a>' +
@@ -2291,7 +2327,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var recs = A.recordsOfDay(t);
     var done = plans.filter(function (p) { return A.isTaskDone(t, p.id); }).length;
     var sec = A.totalDuration(recs);
-    var pct = plans.length ? done / plans.length * 100 : 0;
+    // 时间占比完成度：已完成计划的时段时长 ÷ 全部计划的时段时长
+    var totalMin = plans.reduce(function (s, p) { return s + A.planRequiredMin(p); }, 0);
+    var doneMin = plans.filter(function (p) { return A.isTaskDone(t, p.id); })
+      .reduce(function (s, p) { return s + A.planRequiredMin(p); }, 0);
+    var pct = A.completionPct(doneMin, totalMin);
 
     var orphan = recs.filter(function (r) {
       return !plans.some(function (p) { return p.id === r.planId; });
@@ -2321,8 +2361,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '</div>' +
       '<div class="bar-track" style="height:10px"><div class="bar-fill" style="width:' + Math.max(2, pct).toFixed(1) +
       '%;background:linear-gradient(90deg,var(--primary),var(--secondary))"></div></div>' +
-      '<div class="card-desc" style="margin-top:8px">完成度 ' + Math.round(pct) + '%' +
-      (plans.length && done === plans.length ? ' 🎉 今天的任务全部完成，了不起！' : '') + '</div></div>';
+      '<div class="card-desc" style="margin-top:8px">完成度 ' + pct.toFixed(1) + '%' +
+      (plans.length && done === plans.length ? ' 🎉 今天的任务全部完成，了不起！' : '') + '</div>' +
+      (plans.length ? '<div class="card-desc" style="margin-top:2px;font-size:11.5px;color:var(--muted)">完成度按各计划时段时长加权；未设置时段的计划按默认 ' + A.DEFAULT_PLAN_MINUTES + ' 分钟计。</div>' : '') +
+      '</div>';
 
     var list = plans.length
       ? plans.map(function (p, i) { return taskCardHTML(p, t, i); }).join('')
@@ -2576,12 +2618,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var subjProg = A.subjectsProgress();
     var chapDash = '';
     if (subjProg.length) {
-      var totalAll = subjProg.reduce(function (s, sub) { return s + sub.total; }, 0);
-      var doneAll = subjProg.reduce(function (s, sub) { return s + sub.done; }, 0);
-      var allPct = totalAll ? Math.round(doneAll / totalAll * 100) : 0;
+      var totalSecs = subjProg.reduce(function (s, sub) { return s + sub.total; }, 0);
+      var doneSecs = subjProg.reduce(function (s, sub) { return s + sub.done; }, 0);
+      var totalAllMin = subjProg.reduce(function (s, sub) { return s + sub.totalMin; }, 0);
+      var doneAllMin = subjProg.reduce(function (s, sub) { return s + sub.doneMin; }, 0);
+      var allPct = A.completionPct(doneAllMin, totalAllMin);
       chapDash = '<div class="card rise mb-16" style="--d:.04s">' +
         '<div class="card-head"><div class="card-title"><span class="dot sec"></span>章节计划完成进度</div>' +
-        '<span class="card-desc">累计 ' + doneAll + '/' + totalAll + ' 个小节 · ' + allPct + '%</span>' +
+        '<span class="card-desc">小节 ' + doneSecs + '/' + totalSecs + ' · 时间占比 ' + allPct.toFixed(1) + '%</span>' +
         '<a class="btn btn-sm" href="#/import">详情</a></div>' +
         hierarchyTreeHTML(subjProg, { deletable: false, defaultOpen: 'none' }) +
         '</div>';
@@ -2834,6 +2878,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var recs = A.recordsOfDay(k);
       var done = plans.filter(function (p) { return A.isTaskDone(k, p.id); }).length;
       var sec = A.totalDuration(recs);
+      // 时间占比完成度（与打卡页口径一致）
+      var totalMin = plans.reduce(function (s, p) { return s + A.planRequiredMin(p); }, 0);
+      var doneMin = plans.filter(function (p) { return A.isTaskDone(k, p.id); })
+        .reduce(function (s, p) { return s + A.planRequiredMin(p); }, 0);
+      var dayPct = A.completionPct(doneMin, totalMin);
       var rel = A.relDayLabel(k);
       var items = plans.map(function (p) {
         var d = A.isTaskDone(k, p.id);
@@ -2866,7 +2915,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return '<div class="card rise mb-16" style="--d:' + Math.min(0.3, idx * 0.04).toFixed(2) + 's">' +
         '<div class="card-head"><div class="card-title"><span class="dot"></span>' + esc(A.fmtDateCN(k)) +
         (rel ? ' <span class="tag" style="margin-left:6px">' + rel + '</span>' : '') + '</div>' +
-        '<span class="card-desc">' + done + '/' + plans.length + ' 完成 · ' + esc(A.fmtDur(sec)) + '</span></div>' +
+        '<span class="card-desc">完成度 ' + dayPct.toFixed(1) + '% · 实际专注 ' + esc(A.fmtDur(sec)) + '</span></div>' +
         (items || orphanHTML ? items + orphanHTML : '<div class="card-desc">这一天没有安排任务</div>') +
         '</div>';
     }).join('');
@@ -2949,25 +2998,23 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (!subjects || !subjects.length) return '';
     var html = '<div class="tree">';
     subjects.forEach(function (sub) {
-      var subPct = sub.total ? Math.round(sub.done / sub.total * 100) : 0;
       var subOpen = (defaultOpen === 'subject' || defaultOpen === 'chapter') ? ' open' : '';
       var subId = 'tree-subj-' + treeSeq();
       html += '<div class="tree-node">' +
         '<div class="tree-head">' +
           '<button class="tree-toggle' + subOpen + '" data-act="tree-toggle" data-target="#' + subId + '">' +
             '<span class="caret"></span><span class="tree-name">' + esc(sub.subject) + '</span>' +
-            '<span class="tree-count">完成 ' + sub.done + '/' + sub.total + ' · ' + subPct + '%</span>' +
+            '<span class="tree-count">完成 ' + sub.done + '/' + sub.total + ' 节 · 时长 ' + sub.pct.toFixed(1) + '%</span>' +
           '</button></div>' +
         '<div class="tree-children' + subOpen + '" id="' + subId + '">';
       sub.chapters.forEach(function (ch) {
-        var chPct = ch.total ? Math.round(ch.done / ch.total * 100) : 0;
         var chOpen = (defaultOpen === 'chapter') ? ' open' : '';
         var chId = 'tree-chap-' + treeSeq();
         html += '<div class="tree-node">' +
           '<div class="tree-head">' +
             '<button class="tree-toggle' + chOpen + '" data-act="tree-toggle" data-target="#' + chId + '">' +
               '<span class="caret"></span><span class="tree-name">' + esc(ch.title) + '</span>' +
-              '<span class="tree-count">完成 ' + ch.done + '/' + ch.total + ' · ' + chPct + '%</span>' +
+              '<span class="tree-count">完成 ' + ch.done + '/' + ch.total + ' 节 · 时长 ' + ch.pct.toFixed(1) + '%</span>' +
             '</button>' +
             (deletable ? '<button class="btn btn-xs btn-danger tree-del" data-act="chap-delete" data-id="' + esc(ch.id) + '">删除</button>' : '') +
           '</div>' +
