@@ -837,6 +837,29 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .tree-del { margin-left: 6px; flex: 0 0 auto; }
 .btn-xs { padding: 2px 9px; font-size: 11px; line-height: 1.6; }
 
+/* 每个学科独立的容器框（导入计划页 / 数据看板页共用）：独立外边框 + 柔和阴影，增强视觉区分度 */
+.tree-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 4px 10px 8px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.tree-card:last-child { margin-bottom: 0; }
+.tree-card > .tree { margin-top: 0; }
+/* 数据看板：学科静态头（含完成统计），其下才是可折叠的大章树 */
+.tree-card-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 4px 7px; margin-bottom: 2px;
+  border-bottom: 1px dashed var(--line-2);
+}
+.tree-card-head .tree-card-name {
+  flex: 1; min-width: 0; font-weight: 700; font-size: 13.5px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tree-card-head .tree-count { font-size: 11.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+
 </style>
 </head>
 <body>
@@ -1651,10 +1674,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return recordsOfTask(key, planId).reduce(function (s, r) { return s + r.durationSec; }, 0);
   }
   function isTaskDone(key, planId) {
-    /* 勾选即完成：有打卡记录，或今日项目全部勾选完成，均视为完成 */
-    if (recordsOfTask(key, planId).length > 0) return true;
-    var total = itemTotalCount(key, planId);
-    return total > 0 && itemDoneCount(key, planId) >= total;
+    /* 计划完成 = 实际打卡（开始并计时后产生记录），与「今日具体项目」勾选状态无关 */
+    return recordsOfTask(key, planId).length > 0;
   }
   function totalDuration(list) {
     return list.reduce(function (s, r) { return s + r.durationSec; }, 0);
@@ -2239,29 +2260,37 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<div class="today-item-main"><div class="today-item-title">' + esc(title) + '</div>' +
       '<div class="today-item-sub">' + esc(sub) + (estMin ? ' · ' + estMin + ' 分钟' : '') + '</div></div></div>';
   }
-  /** 今日项目展示：结构化优先，兼容旧 focus 文本。withCheck 控制是否可勾选 */
-  function todayItemsHTML(key, planId, withCheck) {
+  /** 今日项目展示：结构化优先，兼容旧 focus 文本。withCheck 控制是否可勾选。
+      opts.noHead=true 时只返回小节列表（供历史明细表格紧凑复用，避免重复表头）。
+      注意：显示「全部已选小节（含已完成）」——勾选完成只做标记，不使其从列表消失；
+      「去重」仅在「设置今日项目」弹窗中进行（已完成小节不进入可选列表）。 */
+  function todayItemsHTML(key, planId, withCheck, opts) {
+    opts = opts || {};
     var sel = A.daySel(key, planId);
     var manuals = A.dayManuals(key, planId);
     var done = A.dayDoneMap(key, planId);
     var focus = A.focusOf(key, planId);
-    var hasStruct = sel.length || manuals.length;
-    if (!hasStruct) {
-      return focus ? '<div class="plan-focus"><span class="fl">今日具体项目：</span>' + esc(focus) + '</div>' : '';
+    if (!sel.length && !manuals.length) {
+      return opts.noHead ? '' : (focus ? '<div class="plan-focus"><span class="fl">今日具体项目：</span>' + esc(focus) + '</div>' : '');
     }
-    var estMin = A.estMinutesOf(key, planId);
-    var doneN = A.itemDoneCount(key, planId);
-    var total = A.itemTotalCount(key, planId);
+    // openSel 仅用于「待完成」计数/预估；展示仍包含已完成（标记 done 即可，不隐藏）
+    var openSel = sel.filter(function (sid) { return !A.isSectionDone(sid); });
+    var estMin = openSel.reduce(function (sum, sid) {
+      var f = A.findSection(sid); return sum + (f ? (f.section.estMin || 0) : 0);
+    }, 0);
     var rows = sel.map(function (sid) {
       var f = A.findSection(sid);
       if (!f) return '';
-      return itemRowHTML(sid, f.section.title, f.chapter.title, f.section.estMin, !!done[sid], planId, key, withCheck);
+      return itemRowHTML(sid, f.section.title, f.chapter.title, f.section.estMin, A.isSectionDone(sid), planId, key, withCheck);
     }).join('') + manuals.map(function (m) {
       return itemRowHTML(m.id, m.label, '手动补充', 0, !!done[m.id] || m.done, planId, key, withCheck);
     }).join('');
+    if (opts.noHead) {
+      return '<div class="today-items-list">' + rows + '</div>';
+    }
     return '<div class="today-items">' +
       '<div class="today-items-head"><span class="fl">今日具体项目</span>' +
-      '<span class="today-items-meta">预估 ' + estMin + ' 分钟 · 完成 ' + doneN + '/' + total + '</span></div>' +
+      '<span class="today-items-meta">待完成 ' + openSel.length + ' 节 · 预估 ' + estMin + ' 分钟</span></div>' +
       '<div class="today-items-list">' + rows + '</div>' +
       (focus ? '<div class="plan-focus" style="margin-top:6px"><span class="fl">补充：</span>' + esc(focus) + '</div>' : '') +
       '</div>';
@@ -2561,8 +2590,36 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return '<button class="chip' + (n === c[0] ? ' active' : '') + '" data-act="dash-range" data-v="' + c[0] + '">' + c[1] + '</button>';
     }).join('');
 
+    // 章节计划完成进度——仅展示已完成的章节小节，按 学科 → 大章 分组汇总。
+    // 完成数据来自 store.days[].done，与「打卡记录」相互独立，故无论区间内有无打卡记录都应展示。
+    var subjProg = A.subjectsProgress();
+    var chapDash = '';
+    if (subjProg.length) {
+      var totalSecs = subjProg.reduce(function (s, sub) { return s + sub.total; }, 0);
+      var doneSecs = subjProg.reduce(function (s, sub) { return s + sub.done; }, 0);
+      var totalAllMin = subjProg.reduce(function (s, sub) { return s + sub.totalMin; }, 0);
+      var doneAllMin = subjProg.reduce(function (s, sub) { return s + sub.doneMin; }, 0);
+      var allPct = A.completionPct(doneAllMin, totalAllMin);
+      var doneTreeHTML = doneTreesHTML(subjProg);
+      if (doneTreeHTML) {
+        chapDash = '<div class="card rise mb-16" style="--d:.04s">' +
+          '<div class="card-head"><div class="card-title"><span class="dot sec"></span>章节计划完成进度</div>' +
+          '<span class="card-desc">已完成 ' + doneSecs + '/' + totalSecs + ' 节 · 时长 ' + allPct.toFixed(1) + '%</span>' +
+          '<a class="btn btn-sm" href="#/import">详情</a></div>' +
+          doneTreeHTML +
+          '</div>';
+      } else {
+        chapDash = '<div class="card rise mb-16" style="--d:.04s">' +
+          '<div class="card-head"><div class="card-title"><span class="dot sec"></span>章节计划完成进度</div>' +
+          '<span class="card-desc">仅展示已完成的章节</span></div>' +
+          '<div class="hint" style="padding:4px 4px 12px">还没有已完成的章节小节。去「今日学习」勾选完成，进度会在这里汇总；完整计划见「导入计划」页。</div>' +
+          '</div>';
+      }
+    }
+
     if (!recs.length) {
       root.innerHTML = '<div class="chip-row mb-16">' + rangeChips + '</div>' +
+        chapDash +
         '<div class="card rise">' + emptyState({
           emoji: '📊', title: '这个区间还没有打卡数据',
           desc: '完成一次打卡后，这里会出现科目分布、时长趋势和掌握程度统计。',
@@ -2613,23 +2670,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       { label: '平均掌握度', value: avgMastery.toFixed(2), unit: '/5', foot: A.masteryInfo(Math.round(avgMastery)).emoji + ' ' + A.masteryInfo(Math.round(avgMastery)).text, icon: 'ic-star', tone: 'i-amber' },
       { label: '覆盖科目', value: subjects.length, unit: '个', foot: '最多：' + subjects[0], icon: 'ic-book', tone: 'i-violet' }
     ];
-
-    // 章节计划完成进度（与今日勾选实时联动）—— 学科 → 大章 → 小节 分层展开
-    var subjProg = A.subjectsProgress();
-    var chapDash = '';
-    if (subjProg.length) {
-      var totalSecs = subjProg.reduce(function (s, sub) { return s + sub.total; }, 0);
-      var doneSecs = subjProg.reduce(function (s, sub) { return s + sub.done; }, 0);
-      var totalAllMin = subjProg.reduce(function (s, sub) { return s + sub.totalMin; }, 0);
-      var doneAllMin = subjProg.reduce(function (s, sub) { return s + sub.doneMin; }, 0);
-      var allPct = A.completionPct(doneAllMin, totalAllMin);
-      chapDash = '<div class="card rise mb-16" style="--d:.04s">' +
-        '<div class="card-head"><div class="card-title"><span class="dot sec"></span>章节计划完成进度</div>' +
-        '<span class="card-desc">小节 ' + doneSecs + '/' + totalSecs + ' · 时间占比 ' + allPct.toFixed(1) + '%</span>' +
-        '<a class="btn btn-sm" href="#/import">详情</a></div>' +
-        hierarchyTreeHTML(subjProg, { deletable: false, defaultOpen: 'none' }) +
-        '</div>';
-    }
 
     root.innerHTML =
       '<div class="chip-row mb-16">' + rangeChips +
@@ -2839,7 +2879,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         A.WEEK_CN[A.weekdayOf(r.date)] + '</span></td>' +
         '<td data-label="科目">' + subjectTag(r.subject) + '</td>' +
         '<td data-label="任务" class="cell-note">' + esc(r.task) + '</td>' +
-        '<td data-label="今日具体项目" class="cell-note td-dim">' + (r.focus ? esc(r.focus) : '—') + '</td>' +
+        '<td data-label="今日具体项目" class="cell-note td-dim">' + (todayItemsHTML(r.date, r.planId, false, { noHead: true }) || (r.focus ? esc(r.focus) : '—')) + '</td>' +
         '<td data-label="时段" class="td-mono td-dim">' + A.fmtTimeOfDay(r.startedAt) + '–' + A.fmtTimeOfDay(r.endedAt) + '</td>' +
         '<td data-label="时长" class="td-mono"><b>' + esc(A.fmtDur(r.durationSec)) + '</b></td>' +
         '<td data-label="掌握度">' + m.emoji + ' ' + esc(m.text) + '</td>' +
@@ -2886,7 +2926,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var rel = A.relDayLabel(k);
       var items = plans.map(function (p) {
         var d = A.isTaskDone(k, p.id);
-        var focus = A.focusOf(k, p.id);
         var ds = A.durationOfTask(k, p.id);
         var rs = A.recordsOfTask(k, p.id);
         return '<div class="plan-item' + (d ? ' done' : '') + '" style="margin-bottom:8px">' +
@@ -2894,7 +2933,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           (d ? '<span class="tag tag-done">✓ ' + esc(A.fmtDur(ds)) + '</span>' : '<span class="tag tag-pending">未完成</span>') + '</div>' +
           '<div class="plan-meta">' + subjectTag(p.subject) + timeRangeHTML(p.startTime, p.endTime) +
           (rs.length ? rs.map(function (r) { return masteryTag(r.mastery); }).join('') : '') + '</div>' +
-          (focus ? '<div class="plan-focus"><span class="fl">今日具体项目：</span>' + esc(focus) + '</div>' : '') +
+          todayItemsHTML(k, p.id, false) +
           (rs.filter(function (r) { return r.note; }).length
             ? '<div class="plan-note">' + rs.filter(function (r) { return r.note; })
               .map(function (r) { return '备注：' + esc(r.note); }).join('<br>') + '</div>' : '') +
@@ -3035,6 +3074,57 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return html;
   }
 
+  /** 导入计划页：每个学科一个独立的 .tree-card 容器框，内嵌完整树（含已完成/未完成），可删除章节。
+      满足「所有计划仅在导入计划页完整查看」且增强各学科的视觉区分度。 */
+  function importTreesHTML(subjects) {
+    if (!subjects || !subjects.length) return '';
+    return subjects.map(function (sub) {
+      return '<div class="tree-card">' + hierarchyTreeHTML([sub], { deletable: true, defaultOpen: 'chapter' }) + '</div>';
+    }).join('');
+  }
+
+  /** 数据看板「章节计划完成进度」：仅展示已完成的章节小节，按 学科 → 大章 分组。
+      学科头 / 大章头 显示「完成 X/Y 节 · 时长 Z%」，每条已完成小节列出名称、学习时长、完成日期。 */
+  function doneTreesHTML(subjects) {
+    if (!subjects || !subjects.length) return '';
+    var html = '';
+    subjects.forEach(function (sub) {
+      var subDone = sub.chapters.reduce(function (a, c) { return a + c.sections.filter(function (s) { return s.done; }).length; }, 0);
+      if (!subDone) return; // 该学科无已完成小节则不展示
+      var chapHTML = '';
+      sub.chapters.forEach(function (ch) {
+        var doneSecs = ch.sections.filter(function (s) { return s.done; });
+        if (!doneSecs.length) return; // 该大章无已完成小节则不展示
+        var chId = 'tree-done-chap-' + treeSeq();
+        chapHTML += '<div class="tree-node">' +
+          '<div class="tree-head">' +
+            '<button class="tree-toggle open" data-act="tree-toggle" data-target="#' + chId + '">' +
+              '<span class="caret"></span><span class="tree-name">' + esc(ch.title) + '</span>' +
+              '<span class="tree-count">完成 ' + doneSecs.length + '/' + ch.total + ' 节 · 时长 ' + ch.pct.toFixed(1) + '%</span>' +
+            '</button></div>' +
+          '<div class="tree-children open" id="' + chId + '">' +
+            doneSecs.map(function (s) {
+              return '<div class="tree-leaf done">' +
+                '<span class="leaf-check on">' + ic('ic-check', 12) + '</span>' +
+                '<span class="leaf-title">' + esc(s.title) + '</span>' +
+                '<span class="leaf-min">学习时长 ' + (s.estMin || 0) + ' 分</span>' +
+                '<span class="leaf-date">完成于 ' + (s.lastDate ? esc(A.fmtDateCN(s.lastDate, false)) : '—') + '</span>' +
+              '</div>';
+            }).join('') +
+          '</div></div>';
+      });
+      if (!chapHTML) return;
+      html += '<div class="tree-card">' +
+        '<div class="tree-card-head">' +
+          '<span class="tree-card-name">' + esc(sub.subject) + '</span>' +
+          '<span class="tree-count">完成 ' + subDone + '/' + sub.total + ' 节 · 时长 ' + sub.pct.toFixed(1) + '%</span>' +
+        '</div>' +
+        '<div class="tree">' + chapHTML + '</div>' +
+      '</div>';
+    });
+    return html;
+  }
+
   /* ================================================================
      导入计划页
      ================================================================ */
@@ -3059,7 +3149,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           '<button class="btn btn-sm" data-act="tpl-download">' + ic('ic-download', 16) + '下载模板</button></div>'
       });
     } else {
-      body = hierarchyTreeHTML(subjProg, { deletable: true, defaultOpen: 'subject' });
+      body = importTreesHTML(subjProg);
     }
     root.innerHTML = head + '<div id="import-list">' + body + '</div>';
 
@@ -3233,6 +3323,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function itemsModalBodyHTML() {
     var st = ui.itemsState;
     if (!st) return '';
+    // 已完成（已勾选）的章节小节不再参与今日项目：从选择集中剔除，保证该处只展示未完成项
+    st.sel = st.sel.filter(function (sid) { return !A.isSectionDone(sid); });
     var allChapters = A.chaptersAll();
     var plan = A.planById(st.planId);
     // 学科筛选：仅展示该学科下的章节，确保科目与内容一一对应
@@ -3240,7 +3332,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var subjSel = st.subject;
     var chapters = (!subjSel) ? allChapters : allChapters.filter(function (ch) { return ch.subject === subjSel; });
 
-    // 已选小节列表
+    // 已选小节列表（仅未完成）
     var selRows = st.sel.map(function (sid) {
       var f = A.findSection(sid);
       if (!f) return '';
@@ -3256,18 +3348,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         return '<option value="' + esc(s) + '"' + (s === subjSel ? ' selected' : '') + '>' + esc(s) + '</option>';
       }).join('') + '</select>';
 
-    // 新增下拉：列出当前学科下未选小节，按章分组
+    // 新增下拉：列出当前学科下未选且「未完成」的小节，按章分组
     var hasAvail = chapters.some(function (ch) {
-      return ch.sections.some(function (s) { return st.sel.indexOf(s.id) < 0; });
+      return ch.sections.some(function (s) { return st.sel.indexOf(s.id) < 0 && !A.isSectionDone(s.id); });
     });
     var pickSelect = hasAvail
       ? '<select class="select" data-change="items-pick"><option value="">+ 选择要完成的小节…</option>' +
         chapters.map(function (ch) {
-          var opts = ch.sections.filter(function (s) { return st.sel.indexOf(s.id) < 0; })
+          var opts = ch.sections.filter(function (s) { return st.sel.indexOf(s.id) < 0 && !A.isSectionDone(s.id); })
             .map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.title) + ' (' + s.estMin + '分)</option>'; }).join('');
           return opts ? '<optgroup label="' + esc(ch.title) + '">' + opts + '</optgroup>' : '';
         }).join('') + '</select>'
-      : (chapters.length ? '<div class="hint">所有小节已选完</div>' : '');
+      : (chapters.length ? '<div class="hint">所有小节已选完或已完成</div>' : '');
 
     // 手动项
     var manualRows = st.manuals.map(function (m) {
@@ -3357,6 +3449,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   }
+  /** 今日具体项目纯文本汇总（与页面今日项目同源）：章节小节 + 手动补充，含完成标记。供 CSV 导出 */
+  function itemsText(date, planId) {
+    if (!date) return '';
+    var sel = A.daySel(date, planId);
+    var manuals = A.dayManuals(date, planId);
+    var parts = sel.map(function (sid) {
+      var f = A.findSection(sid);
+      if (!f) return '';
+      return f.chapter.title + ' › ' + f.section.title + (A.isSectionDone(sid) ? '(已完成)' : '');
+    }).filter(Boolean);
+    manuals.forEach(function (m) {
+      parts.push(m.label + (m.done ? '(已完成)' : ''));
+    });
+    return parts.join('；');
+  }
   function exportCSV() {
     var list = (ui.route === 'history') ? filteredRecords() : S.records.slice().sort(function (a, b) {
       return b.date < a.date ? -1 : b.date > a.date ? 1 : 0;
@@ -3366,7 +3473,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '实际开始', '实际结束', '时长(分钟)', '时长(小时)', '掌握程度', '掌握评分', '备注'];
     var rows = list.map(function (r) {
       var m = A.masteryInfo(r.mastery);
-      return [r.date, '周' + A.WEEK_CN[A.weekdayOf(r.date)], r.subject, r.task, r.focus,
+      var todayItems = itemsText(r.date, r.planId) || r.focus || '';
+      return [r.date, '周' + A.WEEK_CN[A.weekdayOf(r.date)], r.subject, r.task, todayItems,
       r.planStart, r.planEnd, A.fmtTimeOfDay(r.startedAt), A.fmtTimeOfDay(r.endedAt),
       A.minutesOf(r.durationSec), (r.durationSec / 3600).toFixed(2), m.text, r.mastery, r.note]
         .map(csvCell).join(',');
