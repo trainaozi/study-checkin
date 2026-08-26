@@ -3145,7 +3145,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function importTreesHTML(subjects) {
     if (!subjects || !subjects.length) return '';
     return subjects.map(function (sub) {
-      return '<div class="tree-card">' + hierarchyTreeHTML([sub], { deletable: true, defaultOpen: 'chapter' }) + '</div>';
+      return '<div class="tree-card">' + hierarchyTreeHTML([sub], { deletable: true, defaultOpen: 'subject' }) + '</div>';
     }).join('');
   }
 
@@ -3217,7 +3217,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     } else {
       body = importTreesHTML(subjProg);
     }
-    root.innerHTML = head + '<div id="import-list">' + body + '</div>';
+    var toggleAll = chapters.length
+      ? '<div class="chip-row" style="margin:0 0 12px"><button class="btn btn-sm" data-act="tree-toggle-all"><span class="tgl-label">一键展开</span></button></div>'
+      : '';
+    root.innerHTML = head + toggleAll + '<div id="import-list">' + body + '</div>';
 
     // 隐藏的文件输入（复用，避免重复创建）
     var inp = $('#import-file');
@@ -3565,6 +3568,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (!el) return;
     el.classList.toggle('open');
     n.classList.toggle('open');
+  };
+  /** 导入计划页：一键展开/收起整棵计划树（学科、大章、小节一次性开合） */
+  ACT['tree-toggle-all'] = function (n) {
+    var box = $('#import-list');
+    if (!box) return;
+    var toggles = box.querySelectorAll('.tree-toggle');
+    var total = toggles.length;
+    if (!total) return;
+    var openCount = 0;
+    for (var i = 0; i < total; i++) { if (toggles[i].classList.contains('open')) openCount++; }
+    // 只要存在未展开的节点就全部展开，否则全部收起
+    var target = openCount < total;
+    for (var j = 0; j < total; j++) {
+      var t = toggles[j];
+      var sel = t.getAttribute('data-target');
+      var el = sel ? box.querySelector(sel) : null;
+      t.classList.toggle('open', target);
+      if (el) el.classList.toggle('open', target);
+    }
+    var label = n.querySelector ? n.querySelector('.tgl-label') : null;
+    if (label) label.textContent = target ? '一键收起' : '一键展开';
   };
   /** 今日项目弹窗：切换学科筛选，刷新可选小节 */
   ACT['items-subject'] = function (n) {
