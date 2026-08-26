@@ -66,12 +66,22 @@ html, body {
 body {
   font-family: var(--font);
   color: var(--ink);
-  background: linear-gradient(160deg, #F0FAF7 0%, #F4F9FF 42%, #FFF6F1 100%);
-  background-attachment: fixed;
+  background: var(--bg);
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+}
+
+/* 渐变背景原来用 background-attachment: fixed，会让浏览器在每次滚动时重绘整屏渐变。
+   改为一个固定定位的伪元素层：它是一块静态的合成层，滚动时不会触发重绘，视觉完全一致。 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(160deg, #F0FAF7 0%, #F4F9FF 42%, #FFF6F1 100%);
+  pointer-events: none;
 }
 
 #particles {
@@ -108,9 +118,9 @@ a { color: var(--primary-dark); text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(255, 255, 255, .72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, .9);
+  /* 侧栏是固定大面板，背景粒子在其后移动会持续触发高斯模糊重栅格化；
+     提高不透明度并去掉 blur，观感仍清爽，但空闲/滚动时省下整块面板的模糊合成。 */
   border-right: 1px solid var(--line);
 }
 
@@ -212,9 +222,11 @@ a { color: var(--primary-dark); text-decoration: none; }
   from { opacity: 0; transform: translateY(-14px) scale(.96); }
   to { opacity: 1; transform: none; }
 }
-@keyframes pulseSoft {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(63, 191, 160, .34); }
-  70% { box-shadow: 0 0 0 12px rgba(63, 191, 160, 0); }
+/* 原 pulseSoft 用 box-shadow 扩散做脉冲，box-shadow 动画每帧都会触发重绘。
+   改为用 ::after 伪元素做 transform+opacity 的扩散环——两者都只走合成器，不重绘。 */
+@keyframes pulseRing {
+  0% { transform: scale(.6); opacity: .65; }
+  70%, 100% { transform: scale(2.4); opacity: 0; }
 }
 @keyframes growBar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
@@ -226,9 +238,10 @@ a { color: var(--primary-dark); text-decoration: none; }
 
 /* ------------------------------------------------------------- 卡片 */
 .card {
-  background: rgba(255, 255, 255, .88);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, .92);
+  /* 去掉 backdrop-filter：卡片在滚动页里大量出现，而背景粒子在动，
+     每帧都要对每张卡背后的区域重新做高斯模糊，是滚动时最大的合成开销之一。
+     把背景不透明度提到 .92 后，去掉模糊后观感几乎不变，但滚动 GPU 占用显著下降。 */
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 20px;
@@ -423,6 +436,9 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   transition: box-shadow .24s, transform .24s, border-color .24s;
   position: relative;
   overflow: hidden;
+  /* 归档页一天可能有几十条计划项：视口外项跳过渲染，进一步压低长列表滚动开销。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 }
 .plan-item::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
@@ -536,11 +552,21 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .timer-hint { font-size: 11.5px; color: var(--muted); }
 .timer-actions { display: flex; gap: 8px; }
 .dot-live {
+  position: relative;
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--primary); display: inline-block;
-  animation: pulseSoft 1.8s infinite;
 }
-.dot-live.paused { background: var(--amber); animation: none; }
+.dot-live::after {
+  content: '';
+  position: absolute; left: 50%; top: 50%;
+  width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulseRing 1.8s ease-out infinite;
+  pointer-events: none;
+}
+.dot-live.paused { background: var(--amber); }
+.dot-live.paused::after { display: none; animation: none; }
 
 /* 进度环 */
 .ring-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
@@ -588,7 +614,14 @@ table.tbl th {
   position: sticky; top: 0; z-index: 1;
 }
 table.tbl td { padding: 11px 13px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
-table.tbl tbody tr { transition: background .18s; }
+table.tbl tbody tr {
+  transition: background .18s;
+  /* 历史记录可能很长：让视口外的行跳过渲染与布局，滚动时只处理可见行，
+     显存/绘制/合成开销随之下降。contain-intrinsic-size 预留行高，避免滚动条跳动。
+     不支持的浏览器（Safari/Firefox 旧版）会直接忽略该属性，无副作用。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+}
 table.tbl tbody tr:hover { background: #FAFEFD; }
 table.tbl tbody tr:last-child td { border-bottom: none; }
 .td-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -651,9 +684,8 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .tabbar {
   display: none;
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-  background: rgba(255, 255, 255, .93);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, .96);
+  /* 移动端底栏同样压在动态粒子背景上；去 blur 并提不透明度，避免每帧重模糊整条底栏。 */
   border-top: 1px solid var(--line);
   padding: 7px 4px calc(7px + env(safe-area-inset-bottom));
   overflow-x: auto;
@@ -1828,15 +1860,40 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (!ctx) return;
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var dots = [], W = 0, H = 0, dpr = 1, raf = null, blobs = [];
+    // 离屏预渲染：3 个柔光色块是静止的，每帧重建径向渐变是整段最贵的操作。
+    // 改为只在 resize 时渲染一次到离屏 canvas，运行时直接 drawImage 贴图。
+    var blobCanvas = document.createElement('canvas');
+    var blobCtx = blobCanvas.getContext('2d');
+    // 帧率节流：背景位移极慢（0.22px/帧），30fps 与 60fps 肉眼无差，
+    // 却把每帧的绘制 + 全屏图层合成开销砍掉一半。
+    var FRAME_MS = 1000 / 30, last = 0;
+
+    function renderBlobs() {
+      blobCanvas.width = canvas.width;
+      blobCanvas.height = canvas.height;
+      blobCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      blobCtx.clearRect(0, 0, W, H);
+      blobs.forEach(function (b) {
+        var g = blobCtx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+        g.addColorStop(0, b.c);
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        blobCtx.fillStyle = g;
+        blobCtx.beginPath();
+        blobCtx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        blobCtx.fill();
+      });
+    }
 
     function resize() {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      // 背景是装饰层，1.5 倍足矣；相较 2 倍， backing 像素数减少约 44%。
+      dpr = Math.min(1.5, window.devicePixelRatio || 1);
       W = canvas.clientWidth || window.innerWidth;
       H = canvas.clientHeight || window.innerHeight;
       canvas.width = Math.floor(W * dpr);
       canvas.height = Math.floor(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      var target = clamp(Math.round(W * H / 26000), 22, 64);
+      // 密度下调（22–64 → 18–44），连接线 O(n²) 总成本随之下降，视觉几乎不变。
+      var target = clamp(Math.round(W * H / 32000), 18, 44);
       dots = [];
       for (var i = 0; i < target; i++) {
         dots.push({
@@ -1854,19 +1911,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         { x: W * 0.86, y: H * 0.24, r: Math.max(W, H) * 0.2, c: 'rgba(127,179,245,0.10)' },
         { x: W * 0.7, y: H * 0.85, r: Math.max(W, H) * 0.22, c: 'rgba(255,158,122,0.09)' }
       ];
+      renderBlobs();
     }
 
     function paint() {
       ctx.clearRect(0, 0, W, H);
-      blobs.forEach(function (b) {
-        var g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-        g.addColorStop(0, b.c);
-        g.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
+      ctx.drawImage(blobCanvas, 0, 0, W, H);
       for (var i = 0; i < dots.length; i++) {
         var p = dots[i];
         for (var j = i + 1; j < dots.length; j++) {
@@ -1889,14 +1939,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     }
 
-    function step() {
-      for (var i = 0; i < dots.length; i++) {
-        var p = dots[i];
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < -10) p.x = W + 10; else if (p.x > W + 10) p.x = -10;
-        if (p.y < -10) p.y = H + 10; else if (p.y > H + 10) p.y = -10;
+    function step(ts) {
+      ts = ts || 0;
+      if (ts - last >= FRAME_MS) {
+        last = ts;
+        for (var i = 0; i < dots.length; i++) {
+          var p = dots[i];
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < -10) p.x = W + 10; else if (p.x > W + 10) p.x = -10;
+          if (p.y < -10) p.y = H + 10; else if (p.y > H + 10) p.y = -10;
+        }
+        paint();
       }
-      paint();
       raf = requestAnimationFrame(step);
     }
 
@@ -1910,8 +1964,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
+        // 标签页隐藏时彻底停掉动画循环，空闲零开销。
         if (raf) { cancelAnimationFrame(raf); raf = null; }
-      } else if (!reduce && !raf) { step(); }
+      } else if (!reduce && !raf) { last = 0; step(); }
+    });
+    // 窗口失焦（切到别的程序）时也暂停，进一步压低空闲时的 GPU 占用。
+    window.addEventListener('blur', function () {
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+    });
+    window.addEventListener('focus', function () {
+      if (!reduce && !raf && !document.hidden) { last = 0; step(); }
     });
   }
 
@@ -2713,6 +2775,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     Chart.defaults.font.family = '"PingFang SC","Microsoft YaHei",system-ui,sans-serif';
     Chart.defaults.font.size = 12;
     Chart.defaults.color = '#8AA3AB';
+    // 看板有 4 张图表，默认会按 window.devicePixelRatio 放大 backing 分辨率。
+    // 在 2x/3x 屏上这会让画布像素数翻 4–9 倍，滚动与重绘成本陡增。
+    // 封顶到 2 倍：肉眼几乎无差，但显存与栅格化开销大幅下降。
+    Chart.defaults.devicePixelRatio = Math.min(2, window.devicePixelRatio || 1);
     var narrow = window.innerWidth < 760;
     var subjSecs = subjects.map(function (s) { return subjMap[s].sec; });
 
