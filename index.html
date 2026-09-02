@@ -1836,17 +1836,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /** 单节点 ETA 推算：给定剩余分钟与有效计划ID，逐日模拟至归零（窗口上限 730 天）。
       返回 {status, remainingMin, boundPlans, dailyAvgMin, estDays, etaDate, etaDateISO}
       status: done | on-track | no-plan | far */
-  function simulateETA(remainingMin, planIds) {
+  /** 推算预计完成日期。starting 偏移点由 startDate 指定（默认今天），便于「按章节顺序累加」：
+      第一章从今天起算；后续各章以「上一章完成日期」为 startDate 接着累加，实现顺序链式推算。 */
+  function simulateETA(remainingMin, planIds, startDate) {
+    var start = startDate || today();
     var horizon = 730;
     var bound = asArray(planIds).length;
     if (remainingMin <= 0) {
-      return { status: 'done', remainingMin: 0, boundPlans: bound, dailyAvgMin: 0, estDays: 0, etaDate: today(), etaDateISO: fmtDateISO(today()) };
+      return { status: 'done', remainingMin: 0, boundPlans: bound, dailyAvgMin: 0, estDays: 0, etaDate: start, etaDateISO: fmtDateISO(start) };
     }
     if (bound === 0) {
       return { status: 'no-plan', remainingMin: remainingMin, boundPlans: 0, dailyAvgMin: 0, estDays: null, etaDate: null, etaDateISO: '' };
     }
     var avg = nodeDailyAvgMinFor(planIds);
-    var rem = remainingMin, days = 0, cur = today();
+    var rem = remainingMin, days = 0, cur = start;
     while (days <= horizon && rem > 0) {
       var m = planMinOnForIds(planIds, cur);
       if (m > 0) rem -= m;
@@ -1854,18 +1857,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       cur = shiftDays(cur, 1);
     }
     if (rem <= 0) {
-      var eta = shiftDays(today(), Math.max(0, days - 1));
+      var eta = shiftDays(start, Math.max(0, days - 1));
       return { status: 'on-track', remainingMin: remainingMin, boundPlans: bound, dailyAvgMin: avg, estDays: Math.max(0, days - 1), etaDate: eta, etaDateISO: fmtDateISO(eta) };
     }
     return { status: 'far', remainingMin: remainingMin, boundPlans: bound, dailyAvgMin: avg, estDays: null, etaDate: null, etaDateISO: '' };
   }
-  /** 逐节点推算预计完成日期（学科 tree-name / 大章 / 小节 三层独立）。
+  /** 逐节点推算预计完成日期（学科 tree-name / 大章 / 小节 三层）。
+      大章按文档顺序「链式累加」：第一章从今天起算，第二章以第一章完成日期为起算点，依次类推，
+      上一章无法估算（no-plan/far/done）则不推进 cursor，下游各章继续沿用最近一个有效完成日期。
       返回 { subjects:[...], bySubject:{学科:eta}, byChapter:{大章id:eta}, bySection:{小节id:eta} }
       每个 eta 含 {kind, ref, title, subject, chapterId?, remainingMin, boundPlans, dailyAvgMin, estDays, etaDate, etaDateISO, status, chapters?/sections?} */
   function nodeETAs() {
     var prog = subjectsProgress();
     var bySubject = {}, byChapter = {}, bySection = {};
     var subjects = prog.map(function (sub) {
+      var cursor = today(); // 本学科各章累加的游标：上一章完成日期
       var chapters = sub.chapters.map(function (ch) {
         var sections = ch.sections.map(function (s) {
           var remaining = s.done ? 0 : (s.estMin || 0);
@@ -1875,8 +1881,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           return eta;
         });
         var chRemaining = sections.reduce(function (a, x) { return a + x.remainingMin; }, 0);
-        var chEta = simulateETA(chRemaining, effectiveNodePlanIds('chapter', ch.id, sub.subject));
+        // 按章节顺序累加：本大章以 cursor（上一章完成日期）为起算点
+        var chEta = simulateETA(chRemaining, effectiveNodePlanIds('chapter', ch.id, sub.subject), cursor);
         chEta.kind = 'chapter'; chEta.ref = ch.id; chEta.title = ch.title; chEta.subject = sub.subject; chEta.sections = sections;
+        // 仅当本大章能推算出具体完成日期时才推进 cursor；done/no-plan/far 不推进（下游沿用最近有效日期）
+        if (chEta.etaDate) cursor = chEta.etaDate;
         byChapter[ch.id] = chEta;
         return chEta;
       });
