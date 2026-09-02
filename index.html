@@ -892,6 +892,33 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 }
 .tree-card-head .tree-count { font-size: 11.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
 
+/* 预计完成日期（ETA）徽标与卡片 */
+.eta-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; line-height: 1.25; }
+.eta-badge .eta-date { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.eta-badge .eta-sub { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+.eta-ok .eta-date { color: var(--ok, #16a34a); }
+.eta-done .eta-date { color: var(--ink); }
+.eta-muted .eta-date { color: var(--muted); }
+.eta-warn .eta-date { color: var(--warn, #d97706); }
+.tree-card-head .eta-assoc { margin-left: 2px; flex: 0 0 auto; }
+
+.eta-list { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 0; }
+.eta-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2, var(--card)); }
+.eta-row .eta-subj { flex: 0 0 84px; font-weight: 700; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eta-row .eta-badge { flex: 1; align-items: flex-start; text-align: left; }
+.eta-row .eta-badge .eta-sub { text-align: left; }
+.eta-row .eta-assoc { flex: 0 0 auto; }
+
+/* 关联计划弹窗内的计划列表 */
+.eta-plan-list { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; margin: 4px 0 2px; }
+.eta-plan-row { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.eta-plan-row:hover { border-color: var(--brand, #6d8bff); }
+.eta-plan-row > input[type=checkbox] { flex: 0 0 auto; width: 16px; height: 16px; }
+.eta-plan-row .eta-plan-sub { flex: 0 0 64px; font-weight: 600; font-size: 12px; color: var(--ink); }
+.eta-plan-row .eta-plan-task { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eta-plan-row .eta-plan-rep { flex: 0 0 auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+
 </style>
 </head>
 <body>
@@ -1141,6 +1168,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var d = parseKey(key);
     return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日 星期' + WEEK_CN[d.getDay()];
   }
+  /** 统一的「预计完成日期」格式：YYYY-MM-DD 周X（含年份，跨年不歧义） */
+  function fmtDateISO(key) {
+    var d = parseKey(key);
+    return dateKey(d) + ' 周' + WEEK_CN[d.getDay()];
+  }
   function relDayLabel(key) {
     var t = today();
     if (key === t) return '今天';
@@ -1233,6 +1265,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       days: {},
       records: [],
       timer: null,
+      /* 学科 ↔ 计划关联：{ '<学科名>': { planIds: [planId...], updatedAt: ts } }
+         用于「预计完成日期」推算——该学科的每日可用学习时长来自这些关联计划。
+         未建立记录的学科按同名科目自动匹配（见 effectiveSubjectPlanIds） */
+      subjectPlans: {},
       /* 删除墓碑：{ plans:{id:ts}, records:{id:ts}, chapters:{id:ts} }
          用于云同步传播删除操作，防止被云端旧数据复活 */
       tombstones: { plans: {}, records: {}, chapters: {} },
@@ -1371,6 +1407,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     };
   }
 
+  /** 归一化学科↔计划关联表：{ '<学科>': { planIds:[...], updatedAt } } */
+  function sanitizeSubjectPlans(raw) {
+    var src = asObject(raw), out = {};
+    Object.keys(src).forEach(function (k) {
+      var subj = asText(k, 40).trim();
+      if (!subj) return;
+      var v = src[k];
+      // 兼容直接写成数组的旧/外部数据
+      var ids = asArray(v && v.planIds ? v.planIds : v)
+        .map(function (x) { return asText(x, 60).trim(); })
+        .filter(Boolean);
+      var uniq = [], seen = {};
+      ids.forEach(function (id) { if (!seen[id]) { seen[id] = 1; uniq.push(id); } });
+      out[subj] = { planIds: uniq, updatedAt: Number(v && v.updatedAt) || 0 };
+    });
+    return out;
+  }
+
   function sanitizeTimer(t) {
     t = asObject(t);
     if (!t.planId || !/^\d{4}-\d{2}-\d{2}$/.test(t.date)) return null;
@@ -1431,6 +1485,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     store.plans = asArray(data.plans).map(sanitizePlan).filter(Boolean);
     store.chapters = asArray(data.chapters).map(sanitizeChapter).filter(Boolean);
+    store.subjectPlans = sanitizeSubjectPlans(data.subjectPlans);
     store.records = asArray(data.records).map(sanitizeRecord).filter(Boolean)
       .sort(function (a, b) { return (b.endedAt || b.createdAt) - (a.endedAt || a.createdAt); });
 
@@ -1501,6 +1556,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     store.updatedAt = Date.now();
     store.plans = data.plans;
     store.chapters = data.chapters;
+    store.subjectPlans = data.subjectPlans;
     store.records = data.records;
     store.days = data.days;
     store.timer = data.timer;
@@ -1668,6 +1724,78 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var totalMin = chaps.reduce(function (a, c) { return a + c.totalMin; }, 0);
       var doneMin = chaps.reduce(function (a, c) { return a + c.doneMin; }, 0);
       return { subject: subj, total: total, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), chapters: chaps };
+    });
+  }
+
+  /* ---------- 预计完成日期（ETA）：学科 tree-name ↔ 计划 关联 + 推算 ---------- */
+  /** 某学科(tree-name)实际绑定的计划ID：优先用 subjectPlans 显式配置，否则按 plan.subject 自动匹配（向后兼容，无需手动关联也能估算） */
+  function effectiveSubjectPlanIds(subject) {
+    var sp = asObject(store.subjectPlans)[subject];
+    if (sp && asArray(sp.planIds).length) return sp.planIds.slice();
+    return store.plans
+      .filter(function (p) { return (p.subject || '未分类') === subject; })
+      .map(function (p) { return p.id; });
+  }
+  /** 设置某学科的绑定计划（UI 关联弹窗调用），写回 subjectPlans 并持久化。planIds 为空数组表示清除手动关联、回到自动匹配 */
+  function setSubjectPlans(subject, planIds) {
+    subject = asText(subject, 40).trim();
+    if (!subject) return;
+    store.subjectPlans = asObject(store.subjectPlans);
+    if (!planIds || !asArray(planIds).length) {
+      delete store.subjectPlans[subject];
+    } else {
+      var uniq = [], seen = {};
+      asArray(planIds).map(function (x) { return asText(x, 60).trim(); })
+        .filter(Boolean).forEach(function (id) { if (!seen[id]) { seen[id] = 1; uniq.push(id); } });
+      store.subjectPlans[subject] = { planIds: uniq, updatedAt: Date.now() };
+    }
+    saveStore();
+  }
+  /** 某学科在指定日期的「计划投入分钟」= 绑定计划当日适用时段之和 */
+  function subjectPlanMinOn(subject, key) {
+    return effectiveSubjectPlanIds(subject)
+      .map(planById)
+      .filter(function (p) { return p && planAppliesTo(p, key); })
+      .reduce(function (a, p) { return a + planRequiredMin(p); }, 0);
+  }
+  /** 某学科的平均每日计划投入（基于未来 12 周窗口均值，覆盖完整周循环） */
+  function subjectDailyAvgMin(subject) {
+    var win = 84, cur = today(), sum = 0;
+    for (var i = 0; i < win; i++) { sum += subjectPlanMinOn(subject, cur); cur = shiftDays(cur, 1); }
+    return Math.round(sum / win * 10) / 10;
+  }
+  /** 逐学科推算预计完成日期。
+      返回 [{subject,totalMin,doneMin,remainingMin,boundPlans,dailyAvgMin,estDays,etaDate,etaDateISO,status}]
+      status: done(已完成) | on-track(可估算) | no-plan(未关联计划/无投入) | far(窗口内无法完成，速率过低或为零) */
+  function subjectETAs() {
+    var horizon = 730; // 最多向前模拟 2 年
+    var progMap = {};
+    subjectsProgress().forEach(function (s) { progMap[s.subject] = s; });
+    return subjectsOfChapters().map(function (subject) {
+      var prog = progMap[subject] || { totalMin: 0, doneMin: 0 };
+      var totalMin = prog.totalMin, doneMin = prog.doneMin;
+      var remainingMin = Math.max(0, totalMin - doneMin);
+      var planIds = effectiveSubjectPlanIds(subject);
+      var boundPlans = planIds.length;
+      if (totalMin <= 0 || remainingMin <= 0) {
+        return { subject: subject, totalMin: totalMin, doneMin: doneMin, remainingMin: 0, boundPlans: boundPlans, dailyAvgMin: 0, estDays: 0, etaDate: today(), etaDateISO: fmtDateISO(today()), status: 'done' };
+      }
+      if (boundPlans === 0) {
+        return { subject: subject, totalMin: totalMin, doneMin: doneMin, remainingMin: remainingMin, boundPlans: 0, dailyAvgMin: 0, estDays: null, etaDate: null, etaDateISO: '', status: 'no-plan' };
+      }
+      var avg = subjectDailyAvgMin(subject);
+      var rem = remainingMin, days = 0, cur = today();
+      while (days <= horizon && rem > 0) {
+        var m = subjectPlanMinOn(subject, cur);
+        if (m > 0) rem -= m;
+        days++;
+        cur = shiftDays(cur, 1);
+      }
+      if (rem <= 0) {
+        var eta = shiftDays(today(), Math.max(0, days - 1));
+        return { subject: subject, totalMin: totalMin, doneMin: doneMin, remainingMin: remainingMin, boundPlans: boundPlans, dailyAvgMin: avg, estDays: Math.max(0, days - 1), etaDate: eta, etaDateISO: fmtDateISO(eta), status: 'on-track' };
+      }
+      return { subject: subject, totalMin: totalMin, doneMin: doneMin, remainingMin: remainingMin, boundPlans: boundPlans, dailyAvgMin: avg, estDays: null, etaDate: null, etaDateISO: '', status: 'far' };
     });
   }
 
@@ -2070,7 +2198,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // 工具
     $: $, $$: $$, esc: esc, uid: uid, clamp: clamp, pad2: pad2, asText: asText,
     dateKey: dateKey, today: today, parseKey: parseKey, shiftDays: shiftDays,
-    weekdayOf: weekdayOf, fmtDateCN: fmtDateCN, fmtDateFull: fmtDateFull, relDayLabel: relDayLabel,
+    weekdayOf: weekdayOf, fmtDateCN: fmtDateCN, fmtDateFull: fmtDateFull, fmtDateISO: fmtDateISO, relDayLabel: relDayLabel,
     fmtDur: fmtDur, fmtClock: fmtClock, minutesOf: minutesOf, fmtTimeOfDay: fmtTimeOfDay,
     isTimeStr: isTimeStr, timeToMin: timeToMin, masteryInfo: masteryInfo, colorFor: colorFor,
     // 完成度（时间占比）
@@ -2087,6 +2215,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     addChapter: addChapter, deleteChapter: deleteChapter, chaptersProgress: chaptersProgress,
     subjectsOfChapters: subjectsOfChapters, subjectsProgress: subjectsProgress,
     sectionDoneDates: sectionDoneDates, isSectionDone: isSectionDone,
+    // 预计完成日期（ETA）：学科 ↔ 计划关联
+    effectiveSubjectPlanIds: effectiveSubjectPlanIds, setSubjectPlans: setSubjectPlans,
+    subjectPlanMinOn: subjectPlanMinOn, subjectDailyAvgMin: subjectDailyAvgMin, subjectETAs: subjectETAs,
     daySel: daySel, dayManuals: dayManuals, dayDoneMap: dayDoneMap,
     estMinutesOf: estMinutesOf, itemTotalCount: itemTotalCount, itemDoneCount: itemDoneCount,
     setDayItems: setDayItems, toggleItemDone: toggleItemDone,
@@ -2656,6 +2787,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // 完成数据来自 store.days[].done，与「打卡记录」相互独立，故无论区间内有无打卡记录都应展示。
     var subjProg = A.subjectsProgress();
     var chapDash = '';
+    var etaCard = etaCardHTML();
     if (subjProg.length) {
       var totalSecs = subjProg.reduce(function (s, sub) { return s + sub.total; }, 0);
       var doneSecs = subjProg.reduce(function (s, sub) { return s + sub.done; }, 0);
@@ -2682,6 +2814,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (!recs.length) {
       root.innerHTML = '<div class="chip-row mb-16">' + rangeChips + '</div>' +
         chapDash +
+        etaCard +
         '<div class="card rise">' + emptyState({
           emoji: '📊', title: '这个区间还没有打卡数据',
           desc: '完成一次打卡后，这里会出现科目分布、时长趋势和掌握程度统计。',
@@ -2739,6 +2872,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<button class="chip" data-act="export-csv">' + ic('ic-download', 13) + ' 导出 CSV</button></div>' +
       '<div class="grid grid-kpi mb-16">' + kpis.map(kpi).join('') + '</div>' +
       chapDash +
+      etaCard +
 
       '<div class="grid grid-2 mb-16">' +
       '<div class="card rise" style="--d:.06s">' +
@@ -3140,12 +3274,43 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return html;
   }
 
+  /** ETA 徽标：根据 subjectETAs 的某条结果渲染右侧预计完成日期 */
+  function etaBadgeHTML(eta) {
+    if (!eta) return '';
+    var lbl, cls, sub;
+    if (eta.status === 'done') {
+      lbl = '已完成'; cls = 'done';
+      sub = '全部小节已完成';
+    } else if (eta.status === 'no-plan') {
+      lbl = '未关联计划'; cls = 'muted';
+      sub = '关联计划后可估算';
+    } else if (eta.status === 'far') {
+      lbl = '速率过低·暂不可估'; cls = 'warn';
+      sub = '日均仅 ' + eta.dailyAvgMin + ' 分，关联计划且日均有投入后可估算';
+    } else {
+      lbl = '预计 ' + A.fmtDateCN(eta.etaDate, true); cls = 'ok';
+      sub = '剩 ' + eta.remainingMin + ' 分 · 日均 ' + eta.dailyAvgMin + ' 分 · 约 ' + eta.estDays + ' 天';
+    }
+    return '<div class="eta-badge eta-' + cls + '">' +
+      '<span class="eta-date">' + lbl + '</span>' +
+      '<span class="eta-sub">' + sub + '</span>' +
+    '</div>';
+  }
   /** 导入计划页：每个学科一个独立的 .tree-card 容器框，内嵌完整树（含已完成/未完成），可删除章节。
-      满足「所有计划仅在导入计划页完整查看」且增强各学科的视觉区分度。 */
+      学科头右侧显示预计完成日期（ETA）与「关联计划」入口。满足「所有计划仅在导入计划页完整查看」且增强各学科的视觉区分度。 */
   function importTreesHTML(subjects) {
     if (!subjects || !subjects.length) return '';
+    var etaMap = {};
+    A.subjectETAs().forEach(function (e) { etaMap[e.subject] = e; });
     return subjects.map(function (sub) {
-      return '<div class="tree-card">' + hierarchyTreeHTML([sub], { deletable: true, defaultOpen: 'subject' }) + '</div>';
+      return '<div class="tree-card">' +
+        '<div class="tree-card-head">' +
+          '<span class="tree-card-name">' + esc(sub.subject) + '</span>' +
+          etaBadgeHTML(etaMap[sub.subject]) +
+          '<button class="btn btn-xs btn-ghost eta-assoc" data-act="eta-assoc" data-sub="' + esc(sub.subject) + '">关联计划</button>' +
+        '</div>' +
+        hierarchyTreeHTML([sub], { deletable: true, defaultOpen: 'subject' }) +
+      '</div>';
     }).join('');
   }
 
@@ -3189,6 +3354,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '</div>';
     });
     return html;
+  }
+
+  /** 数据看板「预计完成时间」卡片：逐学科展示剩余时长、日均投入、预计完成日期，并提供关联入口 */
+  function etaCardHTML() {
+    var etas = A.subjectETAs();
+    if (!etas.length) return '';
+    var rows = etas.map(function (e) {
+      return '<div class="eta-row">' +
+        '<span class="eta-subj">' + esc(e.subject) + '</span>' +
+        etaBadgeHTML(e) +
+        '<button class="btn btn-xs btn-ghost eta-assoc" data-act="eta-assoc" data-sub="' + esc(e.subject) + '">关联</button>' +
+      '</div>';
+    }).join('');
+    return '<div class="card rise mb-16" style="--d:.05s">' +
+      '<div class="card-head"><div class="card-title"><span class="dot i-violet"></span>预计完成时间</div>' +
+      '<span class="card-desc">按绑定计划的每日学习时长推算</span></div>' +
+      '<div class="eta-list">' + rows + '</div>' +
+      '<div class="hint" style="padding:8px 4px 0">未关联计划时按「计划科目」自动匹配；点「关联」可手动指定 tree-name 对应的计划。</div>' +
+    '</div>';
   }
 
   /* ================================================================
@@ -3467,6 +3651,51 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function refreshItemsModal() {
     var body = $('#items-modal-body');
     if (body && ui.itemsState) body.innerHTML = itemsModalBodyHTML();
+  }
+
+  /* ================================================================
+     弹窗：预计完成日期 —— 学科(tree-name) ↔ 计划 关联
+     ================================================================ */
+  function openEtaAssocModal(subject) {
+    subject = (subject || '').trim();
+    if (!subject) return;
+    var bound = A.effectiveSubjectPlanIds(subject);
+    ui.etaAssocSubject = subject;
+    ui.etaAssocSel = {};
+    bound.forEach(function (id) { ui.etaAssocSel[id] = true; });
+    A.openModal({
+      title: '关联学习计划',
+      sub: '将「' + subject + '」与各计划对应，用于推算预计完成日期',
+      body: '<div id="eta-assoc-body">' + etaAssocBodyHTML() + '</div>',
+      maskClose: false
+    });
+  }
+  function etaAssocBodyHTML() {
+    var subject = ui.etaAssocSubject;
+    var plans = A.store.plans;
+    if (!plans.length) {
+      return '<div class="hint">还没有学习计划。请先在「计划」页添加计划，再回来关联。</div>' +
+        '<div class="modal-foot"><button type="button" class="btn" data-act="modal-close">关闭</button></div>';
+    }
+    var rows = plans.map(function (p) {
+      var checked = ui.etaAssocSel[p.id] ? ' checked' : '';
+      return '<label class="eta-plan-row">' +
+        '<input type="checkbox" data-eta-plan="' + esc(p.id) + '"' + checked + '>' +
+        '<span class="eta-plan-sub">' + esc(p.subject) + '</span>' +
+        '<span class="eta-plan-task">' + esc(p.task) + '</span>' +
+        '<span class="eta-plan-rep">' + esc(A.repeatLabel(p)) + ' · ' + esc(p.startTime) + '–' + esc(p.endTime) + '</span>' +
+      '</label>';
+    }).join('');
+    return '<div class="hint" style="margin-bottom:10px">勾选与该学科对应的计划（可多选）。保存后按这些计划每日投入时长推算「' + esc(subject) + '」的预计完成日期。</div>' +
+      '<div class="eta-plan-list">' + rows + '</div>' +
+      '<div class="modal-foot">' +
+        '<button type="button" class="btn" data-act="modal-close">取消</button>' +
+        '<button type="button" class="btn" data-act="eta-assoc-clear">清除手动关联</button>' +
+        '<button type="button" class="btn btn-primary" data-act="eta-assoc-save">保存关联</button>' +
+      '</div>';
+  }
+  function collectEtaAssocIds() {
+    return $$('#eta-assoc-body input[data-eta-plan]:checked').map(function (c) { return c.getAttribute('data-eta-plan'); });
   }
 
   function openQuickTaskModal() {
@@ -3779,6 +4008,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     A.toast('模板已下载，填写后上传导入', 'ok');
   };
   ACT['import-upload'] = function () { var inp = $('#import-file'); if (inp) inp.click(); };
+  ACT['eta-assoc'] = function (n) { openEtaAssocModal(n.getAttribute('data-sub')); };
+  ACT['eta-assoc-save'] = function () {
+    var subject = ui.etaAssocSubject;
+    if (!subject) return;
+    A.setSubjectPlans(subject, collectEtaAssocIds());
+    A.closeModal();
+    ui.etaAssocSubject = null; ui.etaAssocSel = null;
+    A.toast('已保存「' + subject + '」的计划关联', 'ok');
+    A.renderNav();
+    rerenderCurrent();
+  };
+  ACT['eta-assoc-clear'] = function () {
+    var subject = ui.etaAssocSubject;
+    if (!subject) return;
+    A.setSubjectPlans(subject, []); // 清除手动关联 → 回到按 plan.subject 自动匹配
+    A.closeModal();
+    ui.etaAssocSubject = null; ui.etaAssocSel = null;
+    A.toast('已清除手动关联，改为自动匹配', 'ok');
+    A.renderNav();
+    rerenderCurrent();
+  };
   ACT['chap-delete'] = function (n) {
     var id = n.getAttribute('data-id');
     var ch = A.chapterById(id);
@@ -4231,6 +4481,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return out;
   }
 
+  /** 学科↔计划关联合并：按学科分别取 updatedAt 较新的一方（无 updatedAt 视为旧） */
+  function mergeSubjectPlans(a, b) {
+    var out = {};
+    a = (a && typeof a === 'object') ? a : {};
+    b = (b && typeof b === 'object') ? b : {};
+    Object.keys(a).forEach(function (k) { if (a[k]) out[k] = a[k]; });
+    Object.keys(b).forEach(function (k) {
+      if (!b[k]) return;
+      var cur = out[k], nb = b[k];
+      if (!cur || (Number(nb.updatedAt) || 0) >= (Number(cur.updatedAt) || 0)) out[k] = nb;
+    });
+    return out;
+  }
+
   /** 实体合并（带墓碑）：任一侧墓碑若比实体更新时间更新 → 实体视为已删除，从结果剔除 */
   function mergeEntities(a, b, ta, tb) {
     ta = ta || {}; tb = tb || {};
@@ -4346,6 +4610,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       chapters: mergeEntities(local.chapters, remote.chapters, lt.chapters, rt.chapters),
       records: mergeEntities(local.records, remote.records, lt.records, rt.records),
       days: mergeDays(local.days, remote.days),
+      subjectPlans: mergeSubjectPlans(local.subjectPlans, remote.subjectPlans),
       timer: mergeTimer(local.timer, remote.timer),
       tombstones: {
         plans: mergeTomb(lt.plans, rt.plans),
@@ -4360,6 +4625,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return JSON.parse(JSON.stringify({
       version: s.version, createdAt: s.createdAt, updatedAt: s.updatedAt,
       plans: s.plans, chapters: s.chapters, days: s.days, records: s.records, timer: s.timer,
+      subjectPlans: s.subjectPlans || {},
       tombstones: s.tombstones || { plans: {}, records: {}, chapters: {} },
       meta: s.meta
     }));
@@ -4375,6 +4641,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return {
       version: s.version, createdAt: s.createdAt, updatedAt: s.updatedAt,
       plans: [], chapters: [], days: {}, records: [], timer: null,
+      subjectPlans: {},
       tombstones: { plans: {}, records: {}, chapters: {} },
       meta: { lastOpen: A.today(), notice: '', sync: { rev: 0, lastSyncAt: 0, lastPullAt: 0 } }
     };
@@ -4392,6 +4659,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     s.chapters = merged.chapters || [];
     s.records = merged.records;
     s.days = merged.days;
+    s.subjectPlans = merged.subjectPlans || {};
     s.timer = merged.timer;
     s.tombstones = merged.tombstones || { plans: {}, records: {}, chapters: {} };
     s.version = merged.version || s.version;
@@ -4472,6 +4740,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       chapters: Array.isArray(d.chapters) ? d.chapters : [],
       days: (d.days && typeof d.days === 'object') ? d.days : {},
       records: Array.isArray(d.records) ? d.records : [],
+      subjectPlans: (d.subjectPlans && typeof d.subjectPlans === 'object') ? d.subjectPlans : {},
       timer: d.timer || null,
       tombstones: {
         plans: (d.tombstones && d.tombstones.plans) || {},
@@ -4514,6 +4783,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           data: {
             version: acc.version, createdAt: acc.createdAt, updatedAt: acc.updatedAt,
             plans: acc.plans, chapters: acc.chapters, days: acc.days, records: acc.records, timer: acc.timer,
+            subjectPlans: acc.subjectPlans || {},
             tombstones: acc.tombstones || { plans: {}, records: {}, chapters: {} },
             meta: { lastOpen: acc.meta.lastOpen, notice: acc.meta.notice, sync: { rev: canonical.rev + 1, lastSyncAt: Date.now(), lastPullAt: 0 } }
           }
@@ -4567,6 +4837,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         data: {
           version: merged.version, createdAt: merged.createdAt, updatedAt: merged.updatedAt,
           plans: merged.plans, chapters: merged.chapters, days: merged.days, records: merged.records, timer: merged.timer,
+          subjectPlans: merged.subjectPlans || {},
           tombstones: merged.tombstones || { plans: {}, records: {}, chapters: {} },
           meta: {
             lastOpen: (merged.meta && merged.meta.lastOpen) || A.today(),
