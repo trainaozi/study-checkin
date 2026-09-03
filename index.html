@@ -1836,62 +1836,108 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /** 单节点 ETA 推算：给定剩余分钟与有效计划ID，逐日模拟至归零（窗口上限 730 天）。
       返回 {status, remainingMin, boundPlans, dailyAvgMin, estDays, etaDate, etaDateISO}
       status: done | on-track | no-plan | far */
-  /** 推算预计完成日期。starting 偏移点由 startDate 指定（默认今天），便于「按章节顺序累加」：
-      第一章从今天起算；后续各章以「上一章完成日期」为 startDate 接着累加，实现顺序链式推算。 */
-  function simulateETA(remainingMin, planIds, startDate) {
-    var start = startDate || today();
-    var horizon = 730;
-    var bound = asArray(planIds).length;
-    if (remainingMin <= 0) {
-      return { status: 'done', remainingMin: 0, boundPlans: bound, dailyAvgMin: 0, estDays: 0, etaDate: start, etaDateISO: fmtDateISO(start) };
-    }
-    if (bound === 0) {
-      return { status: 'no-plan', remainingMin: remainingMin, boundPlans: 0, dailyAvgMin: 0, estDays: null, etaDate: null, etaDateISO: '' };
-    }
-    var avg = nodeDailyAvgMinFor(planIds);
-    var rem = remainingMin, days = 0, cur = start;
-    while (days <= horizon && rem > 0) {
-      var m = planMinOnForIds(planIds, cur);
-      if (m > 0) rem -= m;
-      days++;
-      cur = shiftDays(cur, 1);
-    }
-    if (rem <= 0) {
-      var eta = shiftDays(start, Math.max(0, days - 1));
-      return { status: 'on-track', remainingMin: remainingMin, boundPlans: bound, dailyAvgMin: avg, estDays: Math.max(0, days - 1), etaDate: eta, etaDateISO: fmtDateISO(eta) };
-    }
-    return { status: 'far', remainingMin: remainingMin, boundPlans: bound, dailyAvgMin: avg, estDays: null, etaDate: null, etaDateISO: '' };
+  /** 两个日期键之间的日历天数差（b - a，>=0），用于由链式推算结果反推 estDays */
+  function daysBetweenKeys(a, b) {
+    if (!a || !b) return null;
+    var da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+    var d = Math.round((db.getTime() - da.getTime()) / 86400000);
+    return d < 0 ? 0 : d;
   }
-  /** 逐节点推算预计完成日期（学科 tree-name / 大章 / 小节 三层）。
-      大章按文档顺序「链式累加」：第一章从今天起算，第二章以第一章完成日期为起算点，依次类推，
-      上一章无法估算（no-plan/far/done）则不推进 cursor，下游各章继续沿用最近一个有效完成日期。
+  /** 逐节连续排期：按传入顺序（文档顺序）把每节所需的学时，从一条连续时间游标起逐节消耗每日可用学习时长。
+      要点（解决「单节跨多日 / 一日多节 / 连续无重叠」）：
+      - 维护 (curDate, avail)：avail 为 curDate 当天【剩余】可用分钟，被上一节消耗后结转给下一节（同计划同天则不重叠）。
+      - 某节剩余 > 0：从 curDate 当天的 avail 起扣，不足则顺延到下一天并重算该天可用时长；完成日 = 最后一节消耗到的日期。
+      - 某节 done(剩余0)：不消耗、游标不动，起止都 = 当前 curDate。
+      - 某节无计划(no-plan)/窗口内无法完成(far)：不出具体日期，游标不动，下游继续沿用最近有效日期。
+      返回与 items 等长的数组：[{startDate, etaDate, status, dailyAvgMin, estDays}]（日期为 Date 对象，etaDate 可能为 null） */
+  function scheduleChain(items) {
+    var horizon = 730;
+    var cur = today();
+    var dayKey = null, avail = 0, planKey = '__';
+    return items.map(function (it) {
+      var pk = asArray(it.planIds).join(',');
+      var avg = nodeDailyAvgMinFor(it.planIds);
+      var start = cur;
+      if (it.remaining <= 0) {
+        return { startDate: cur, etaDate: cur, status: 'done', dailyAvgMin: 0, estDays: 0 };
+      }
+      if (asArray(it.planIds).length === 0) {
+        return { startDate: cur, etaDate: null, status: 'no-plan', dailyAvgMin: 0, estDays: null };
+      }
+      // 进入新的一天，或计划发生变化时，重算当天可用时长（天级容量仍按当日适用计划计算）
+      if (dayKey !== cur || planKey !== pk) { dayKey = cur; planKey = pk; avail = planMinOnForIds(it.planIds, cur); }
+      var need = it.remaining, guard = 0;
+      while (need > 0 && guard <= horizon) {
+        guard++;
+        if (avail <= 0) { cur = shiftDays(cur, 1); dayKey = cur; planKey = pk; avail = planMinOnForIds(it.planIds, cur); }
+        var take = Math.min(need, avail); need -= take; avail -= take;
+      }
+      if (need <= 0) {
+        return { startDate: start, etaDate: cur, status: 'on-track', dailyAvgMin: avg, estDays: daysBetweenKeys(start, cur) };
+      }
+      return { startDate: start, etaDate: null, status: 'far', dailyAvgMin: avg, estDays: null };
+    });
+  }
+  /** 逐节点推算预计完成日期（学科 / 大章 / 小节 三层）。
+      算法：把某学科下所有小节按「学科 → 大章 → 小节」文档顺序扁平化，交给 scheduleChain 连续排期——
+      每一节以【上一节完成日期】为起算点（跨章连续、无重叠），单节可跨多日、一日可容纳多节。
+      大章的起止 = 其首节起始 ~ 末节完成；学科的起止 = 今天 ~ 末章（末节）完成，均与逐节链完全一致。
       返回 { subjects:[...], bySubject:{学科:eta}, byChapter:{大章id:eta}, bySection:{小节id:eta} }
-      每个 eta 含 {kind, ref, title, subject, chapterId?, remainingMin, boundPlans, dailyAvgMin, estDays, etaDate, etaDateISO, status, chapters?/sections?} */
+      每个 eta 含 {kind, ref, title, subject, chapterId?, remainingMin, boundPlans, dailyAvgMin, estDays, startDate, startDateISO, etaDate, etaDateISO, status, chapters?/sections?} */
   function nodeETAs() {
     var prog = subjectsProgress();
     var bySubject = {}, byChapter = {}, bySection = {};
     var subjects = prog.map(function (sub) {
-      var cursor = today(); // 本学科各章累加的游标：上一章完成日期
-      var chapters = sub.chapters.map(function (ch) {
-        var sections = ch.sections.map(function (s) {
-          var remaining = s.done ? 0 : (s.estMin || 0);
-          var eta = simulateETA(remaining, effectiveNodePlanIds('section', s.id, sub.subject, ch.id));
-          eta.kind = 'section'; eta.ref = s.id; eta.title = s.title; eta.subject = sub.subject; eta.chapterId = ch.id; eta.estMin = s.estMin || 0;
-          bySection[s.id] = eta;
-          return eta;
+      // 扁平化收集全学科所有小节（文档顺序），逐节连续排期
+      var flat = [];
+      sub.chapters.forEach(function (ch) {
+        ch.sections.forEach(function (s) {
+          flat.push({ id: s.id, chapterId: ch.id, title: s.title, remaining: s.done ? 0 : (s.estMin || 0), estMin: s.estMin || 0, planIds: effectiveNodePlanIds('section', s.id, sub.subject, ch.id) });
         });
-        var chRemaining = sections.reduce(function (a, x) { return a + x.remainingMin; }, 0);
-        // 按章节顺序累加：本大章以 cursor（上一章完成日期）为起算点
-        var chEta = simulateETA(chRemaining, effectiveNodePlanIds('chapter', ch.id, sub.subject), cursor);
-        chEta.kind = 'chapter'; chEta.ref = ch.id; chEta.title = ch.title; chEta.subject = sub.subject; chEta.sections = sections;
-        // 仅当本大章能推算出具体完成日期时才推进 cursor；done/no-plan/far 不推进（下游沿用最近有效日期）
-        if (chEta.etaDate) cursor = chEta.etaDate;
+      });
+      var sched = scheduleChain(flat);
+      var secById = {};
+      sched.forEach(function (r, i) {
+        var s = flat[i];
+        var eta = {
+          kind: 'section', ref: s.id, title: s.title, subject: sub.subject, chapterId: s.chapterId, estMin: s.estMin, remainingMin: s.remaining,
+          boundPlans: asArray(s.planIds).length,
+          startDate: r.startDate, startDateISO: fmtDateISO(r.startDate),
+          etaDate: r.etaDate, etaDateISO: r.etaDate ? fmtDateISO(r.etaDate) : '',
+          dailyAvgMin: r.dailyAvgMin, estDays: r.estDays, status: r.status
+        };
+        secById[s.id] = eta; bySection[s.id] = eta;
+      });
+      // 大章起止 = 首节起始 ~ 末节完成（与逐节链完全一致，连续无重叠）
+      var chapters = sub.chapters.map(function (ch) {
+        var secs = ch.sections.map(function (s) { return secById[s.id]; });
+        var chRemaining = secs.reduce(function (a, x) { return a + x.remainingMin; }, 0);
+        var first = secs[0], last = secs.length ? secs[secs.length - 1] : null;
+        var chEta = { kind: 'chapter', ref: ch.id, title: ch.title, subject: sub.subject, sections: secs, remainingMin: chRemaining, boundPlans: effectiveNodePlanIds('chapter', ch.id, sub.subject).length };
+        if (chRemaining <= 0 || !last) {
+          chEta.status = 'done'; chEta.dailyAvgMin = 0; chEta.estDays = 0; chEta.startDate = first ? first.startDate : today(); chEta.etaDate = chEta.startDate;
+        } else if (last.etaDate) {
+          chEta.status = 'on-track'; chEta.dailyAvgMin = last.dailyAvgMin; chEta.estDays = daysBetweenKeys(first.startDate, last.etaDate); chEta.startDate = first.startDate; chEta.etaDate = last.etaDate;
+        } else {
+          chEta.status = last.status; chEta.dailyAvgMin = last.dailyAvgMin; chEta.estDays = null; chEta.startDate = first.startDate; chEta.etaDate = null;
+        }
+        chEta.startDateISO = fmtDateISO(chEta.startDate); chEta.etaDateISO = chEta.etaDate ? fmtDateISO(chEta.etaDate) : '';
         byChapter[ch.id] = chEta;
         return chEta;
       });
+      // 学科级起止 = 首章起始(今天) ~ 末章完成（= 末节完成），与逐节链完全一致
       var subRemaining = chapters.reduce(function (a, c) { return a + c.remainingMin; }, 0);
-      var subEta = simulateETA(subRemaining, effectiveNodePlanIds('subject', sub.subject));
-      subEta.kind = 'subject'; subEta.ref = sub.subject; subEta.title = sub.subject; subEta.subject = sub.subject; subEta.chapters = chapters;
+      var lastCh = chapters.length ? chapters[chapters.length - 1] : null;
+      var subStart = today();
+      var subEta = { kind: 'subject', ref: sub.subject, title: sub.subject, subject: sub.subject, chapters: chapters, remainingMin: subRemaining, boundPlans: effectiveNodePlanIds('subject', sub.subject).length, startDate: subStart };
+      if (subRemaining <= 0 || !lastCh) {
+        subEta.status = 'done'; subEta.dailyAvgMin = 0; subEta.estDays = 0; subEta.etaDate = subStart;
+      } else if (lastCh.etaDate) {
+        subEta.status = 'on-track'; subEta.dailyAvgMin = lastCh.dailyAvgMin; subEta.estDays = daysBetweenKeys(subStart, lastCh.etaDate); subEta.etaDate = lastCh.etaDate;
+      } else {
+        subEta.status = lastCh.status; subEta.dailyAvgMin = lastCh.dailyAvgMin; subEta.estDays = null; subEta.etaDate = null;
+      }
+      subEta.startDateISO = fmtDateISO(subStart); subEta.etaDateISO = subEta.etaDate ? fmtDateISO(subEta.etaDate) : '';
       bySubject[sub.subject] = subEta;
       return subEta;
     });
@@ -3400,7 +3446,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       sub = '日均仅 ' + eta.dailyAvgMin + ' 分，关联计划且日均有投入后可估算';
     } else {
       lbl = '预计 ' + A.fmtDateCN(eta.etaDate, true); cls = 'ok';
-      sub = '剩 ' + eta.remainingMin + ' 分 · 日均 ' + eta.dailyAvgMin + ' 分 · 约 ' + eta.estDays + ' 天';
+      var extra = '';
+      // 逐节/逐章：额外显示链式起点（上一节完成日期），体现连续无重叠的排期
+      if ((eta.kind === 'section' || eta.kind === 'chapter') && eta.startDateISO) extra = ' · 起于 ' + A.fmtDateCN(eta.startDate, false);
+      sub = '剩 ' + eta.remainingMin + ' 分 · 日均 ' + eta.dailyAvgMin + ' 分 · 约 ' + eta.estDays + ' 天' + extra;
     }
     return '<div class="eta-badge eta-' + cls + '">' +
       '<span class="eta-date">' + lbl + '</span>' +
