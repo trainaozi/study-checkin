@@ -50,3 +50,4 @@ coverage/
 # ===== 自动化=====
 build/
 .workbuddy/
+push.sh
