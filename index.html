@@ -679,6 +679,30 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 }
 .toast.ok { background: linear-gradient(120deg, var(--primary-dark), var(--primary)); }
 .toast.warn { background: linear-gradient(120deg, var(--secondary-ink), var(--secondary)); }
+/* 带操作按钮的 toast（删除撤销）：文本与按钮同排，按钮反白以突出可点。
+   关键：#toast-root 整体是 pointer-events:none（避免普通提示挡住页面），
+   父级禁用会连带子元素无法接收指针事件，因此这里必须显式恢复 auto，
+   否则真实浏览器里「撤销」按钮点不动（jsdom 不计算 CSS，测不出来）。 */
+.toast.has-action { padding-right: 8px; pointer-events: auto; cursor: default; }
+.toast .toast-text { white-space: nowrap; }
+.toast .toast-action {
+  flex: none;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: var(--secondary-ink);
+  font-size: 12.5px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform .15s, background .15s;
+}
+.toast .toast-action:hover { background: #fff; transform: scale(1.04); }
+.toast .toast-action:active { transform: scale(.97); }
+.toast .toast-action:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* 表格操作列：编辑 + 删除并排 */
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
 /* --------------------------------------------------------- 移动端 Tab */
 .tabbar {
@@ -760,6 +784,8 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     text-align: left; flex: 0 0 auto;
   }
   .cell-note { max-width: none; text-align: right; }
+  /* 操作列在移动端为 flex 行，编辑/删除按钮保持右对齐不换行 */
+  table.tbl td .row-actions { flex: none; margin-left: auto; }
 }
 
 @media (max-width: 420px) {
@@ -1166,10 +1192,23 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
   }
   function today() { return dateKey(new Date()); }
+  /** 严格日期键校验：必须是真实存在的 YYYY-MM-DD。
+   *  仅靠正则不够——'2026-13-45'、'2026-02-30'、'26-1-1' 都能通过正则，
+   *  但 new Date() 会把它们静默进位成别的日期，导致统计与归档错位。
+   *  这里做「构造后回读比对」，越界即判非法。 */
+  function isDateKey(key) {
+    var s = String(key == null ? '' : key);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    var y = Number(s.slice(0, 4)), m = Number(s.slice(5, 7)), d = Number(s.slice(8, 10));
+    if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+    var dt = new Date(y, m - 1, d);
+    // 回读比对：可排除 2 月 30 日 → 3 月 2 日、13 月 → 次年 2 月等进位
+    return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+  }
+  /** 宽松解析：非法输入回退到今天，保证视图层永不因脏数据崩掉 */
   function parseKey(key) {
-    var p = String(key || '').split('-');
-    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
-    return isNaN(d.getTime()) ? new Date() : d;
+    if (!isDateKey(key)) return new Date();
+    return new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10)));
   }
   function shiftDays(key, n) {
     var d = parseKey(key);
@@ -1323,8 +1362,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       .filter(function (n, i, arr) { return arr.indexOf(n) === i; })
       .sort();
     if (type === 'weekly' && !days.length) days = [weekdayOf(today())];
-    var since = /^\d{4}-\d{2}-\d{2}$/.test(rep.since) ? rep.since : null;
-    var onDate = /^\d{4}-\d{2}-\d{2}$/.test(rep.date) ? rep.date : null;
+    var since = isDateKey(rep.since) ? rep.since : null;
+    var onDate = isDateKey(rep.date) ? rep.date : null;
     var created = Number(p.createdAt) || Date.now();
     if (!since) since = onDate || dateKey(new Date(created));
     var task = asText(p.task, 400).trim();
@@ -1344,8 +1383,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function sanitizeRecord(r) {
     r = asObject(r);
-    var date = /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : null;
-    if (!date) return null;
+    if (!isDateKey(r.date)) return null;
+    var date = r.date;
     return {
       id: asText(r.id) || uid('rec'),
       date: date,
@@ -1458,7 +1497,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function sanitizeTimer(t) {
     t = asObject(t);
-    if (!t.planId || !/^\d{4}-\d{2}-\d{2}$/.test(t.date)) return null;
+    if (!t.planId || !isDateKey(t.date)) return null;
     return {
       planId: asText(t.planId),
       date: t.date,
@@ -1523,7 +1562,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var days = asObject(data.days);
     store.days = {};
     Object.keys(days).forEach(function (k) {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(k)) store.days[k] = sanitizeDay(days[k], k);
+      if (isDateKey(k)) store.days[k] = sanitizeDay(days[k], k);
     });
     store.timer = sanitizeTimer(data.timer);
     var tombs = asObject(data.tombstones);
@@ -1567,6 +1606,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function saveStore() {
     store.version = SCHEMA_VERSION;
     store.updatedAt = Date.now();
+    // 计划相关缓存统一在此失效：saveStore 是所有持久化路径的出口，
+    // 覆盖计划 CRUD、章节导入、备份恢复与云同步合并，避免各调用点漏掉。
+    invalidatePlanMemo();
+    invalidateDailyAvgMemo();
     if (!storageOK) return false;
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(store));
@@ -1593,6 +1636,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     store.timer = data.timer;
     store.tombstones = data.tombstones;
     store.meta = data.meta;
+    invalidateDoneIndex();
     return store;
   }
 
@@ -1684,6 +1728,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if (!lbl) return null;
       return { id: asText(it.id) || uid('mi'), label: lbl, done: !!it.done };
     }).filter(Boolean);
+    invalidateDoneIndex();
     saveStore();
   }
   /** 勾选/取消某个今日项目（章节小节用 secId，手动项用 manualId） */
@@ -1698,6 +1743,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         if (m.id === itemId) m.done = !!d.done[planId][itemId];
       });
     }
+    invalidateDoneIndex();
     saveStore();
   }
   /** 某小节在哪些日期被勾选完成（聚合所有 days，用于完成情况查看） */
@@ -1714,19 +1760,78 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return dates.sort();
   }
   function isSectionDone(secId) { return sectionDoneDates(secId).length > 0; }
-  /** 章节计划整体完成进度：每章 {id,title,total,done,totalMin,doneMin,pct,sections:[{id,title,estMin,done,lastDate}]}
+
+  /* 小节完成索引：一次遍历 days 建 secId → 排序日期数组 的映射。
+     原本每个小节都独立全量扫描 store.days，而 chaptersProgress/subjectsProgress
+     会按小节逐个调用，nodeETAs 又在其上做逐节链式推算——小节数一多就退化成
+     O(小节数 × 天数 × 计划数)。这里改为建一次索引、多次复用，并在数据变更时失效。 */
+  var doneIndexCache = null;
+  function invalidateDoneIndex() { doneIndexCache = null; }
+  function sectionDoneIndex() {
+    if (doneIndexCache) return doneIndexCache;
+    var idx = {};
+    Object.keys(store.days).forEach(function (k) {
+      var d = store.days[k];
+      if (!d || !d.done) return;
+      Object.keys(d.done).forEach(function (planId) {
+        var m = d.done[planId];
+        if (!m) return;
+        Object.keys(m).forEach(function (secId) {
+          if (!m[secId]) return;
+          (idx[secId] || (idx[secId] = [])).push(k);
+        });
+      });
+    });
+    Object.keys(idx).forEach(function (k) { idx[k].sort(); });
+    doneIndexCache = idx;
+    return idx;
+  }
+  /** 单个小节的完成态（走索引，不做全量扫描） */
+  function sectionDoneState(secId) {
+    var dates = sectionDoneIndex()[secId];
+    return { done: !!(dates && dates.length), lastDate: (dates && dates.length) ? dates[dates.length - 1] : '' };
+  }
+  /** 把一章的 sections 映射为带完成态的视图对象 */
+  function chapterSectionsProgress(ch) {
+    var idx = sectionDoneIndex();
+    return ch.sections.map(function (s) {
+      var dates = idx[s.id];
+      return {
+        id: s.id, title: s.title, estMin: s.estMin,
+        done: !!(dates && dates.length),
+        lastDate: (dates && dates.length) ? dates[dates.length - 1] : ''
+      };
+    });
+  }
+  /** 由小节列表汇总出 total/done/totalMin/doneMin/pct（时间占比完成度） */
+  function aggregateSections(secs) {
+    var done = 0, totalMin = 0, doneMin = 0;
+    for (var i = 0; i < secs.length; i++) {
+      var s = secs[i], m = s.estMin || 0;
+      totalMin += m;
+      if (s.done) { done++; doneMin += m; }
+    }
+    return {
+      total: secs.length, done: done,
+      totalMin: totalMin, doneMin: doneMin,
+      pct: completionPct(doneMin, totalMin)
+    };
+  }
+  /** 单个大章的完成进度（含各小节明细） */
+  function chapterProgress(ch) {
+    var secs = chapterSectionsProgress(ch);
+    var agg = aggregateSections(secs);
+    return {
+      id: ch.id, title: ch.title, subject: ch.subject,
+      total: agg.total, done: agg.done,
+      totalMin: agg.totalMin, doneMin: agg.doneMin, pct: agg.pct,
+      sections: secs
+    };
+  }
+  /** 章节计划整体完成进度：每章 {id,title,subject,total,done,totalMin,doneMin,pct,sections:[{id,title,estMin,done,lastDate}]}
       pct 为按小节 estMin 的时间占比完成度（一位小数百分比）。 */
   function chaptersProgress() {
-    return store.chapters.map(function (ch) {
-      var secs = ch.sections.map(function (s) {
-        var dates = sectionDoneDates(s.id);
-        return { id: s.id, title: s.title, estMin: s.estMin, done: dates.length > 0, lastDate: dates[dates.length - 1] || '' };
-      });
-      var done = secs.filter(function (s) { return s.done; }).length;
-      var totalMin = secs.reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
-      var doneMin = secs.filter(function (s) { return s.done; }).reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
-      return { id: ch.id, title: ch.title, total: secs.length, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), sections: secs };
-    });
+    return store.chapters.map(chapterProgress);
   }
   /** 导入章节里出现的学科名（去重升序） */
   function subjectsOfChapters() {
@@ -1740,21 +1845,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return subjectsOfChapters().map(function (subj) {
       var chaps = store.chapters
         .filter(function (c) { return (c.subject || '未分类') === subj; })
-        .map(function (ch) {
-          var secs = ch.sections.map(function (s) {
-            var dates = sectionDoneDates(s.id);
-            return { id: s.id, title: s.title, estMin: s.estMin, done: dates.length > 0, lastDate: dates[dates.length - 1] || '' };
-          });
-          var done = secs.filter(function (s) { return s.done; }).length;
-          var totalMin = secs.reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
-          var doneMin = secs.filter(function (s) { return s.done; }).reduce(function (a, s) { return a + (s.estMin || 0); }, 0);
-          return { id: ch.id, title: ch.title, total: secs.length, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), sections: secs };
-        });
-      var total = chaps.reduce(function (a, c) { return a + c.total; }, 0);
-      var done = chaps.reduce(function (a, c) { return a + c.done; }, 0);
-      var totalMin = chaps.reduce(function (a, c) { return a + c.totalMin; }, 0);
-      var doneMin = chaps.reduce(function (a, c) { return a + c.doneMin; }, 0);
-      return { subject: subj, total: total, done: done, totalMin: totalMin, doneMin: doneMin, pct: completionPct(doneMin, totalMin), chapters: chaps };
+        .map(chapterProgress);
+      // 学科级汇总 = 各章小节的扁平合并（时间占比与逐章口径一致）
+      var flat = [];
+      chaps.forEach(function (c) { flat = flat.concat(c.sections); });
+      var agg = aggregateSections(flat);
+      return {
+        subject: subj,
+        total: agg.total, done: agg.done,
+        totalMin: agg.totalMin, doneMin: agg.doneMin, pct: agg.pct,
+        chapters: chaps
+      };
     });
   }
 
@@ -1805,15 +1906,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         .filter(Boolean).forEach(function (id) { if (!seen[id]) { seen[id] = 1; uniq.push(id); } });
       store.nodePlans[key] = { planIds: uniq, updatedAt: Date.now() };
     }
+    invalidatePlanMemo();
+    invalidateDailyAvgMemo();
     saveStore();
   }
   /** 兼容旧名：设置某学科的绑定计划 */
   function setSubjectPlans(subject, planIds) { setNodePlans('subject', subject, planIds); }
-  /** 一组计划ID在指定日期的「计划投入分钟」= 当日适用时段之和 */
+  /** 一组计划ID在指定日期的「计划投入分钟」= 当日适用时段之和
+   *  memo: 同一 (计划集合, 日期) 在一次 ETA 推算里会被大量重复查询——例如
+   *  「每天 60 分钟的单计划」被 50 个小节共享时，原本要做 50×84 次全表遍历。
+   *  缓存以计划集合签名 + 日期为键，随 plans 变更整体失效。 */
+  var planMinMemo = {};
+  function invalidatePlanMemo() { planMinMemo = {}; }
   function planMinOnForIds(planIds, key) {
-    return asArray(planIds).map(planById)
-      .filter(function (p) { return p && planAppliesTo(p, key); })
-      .reduce(function (a, p) { return a + planRequiredMin(p); }, 0);
+    var ids = asArray(planIds);
+    if (!ids.length || !isDateKey(key)) return 0;
+    var memoKey = ids.join(',') + '|' + key;
+    var hit = planMinMemo[memoKey];
+    if (hit !== undefined) return hit;
+    var sum = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var p = planById(ids[i]);
+      if (p && planAppliesTo(p, key)) sum += planRequiredMin(p);
+    }
+    planMinMemo[memoKey] = sum;
+    return sum;
   }
   /** 某节点在指定日期的「计划投入分钟」= 其有效绑定计划当日适用时段之和 */
   function nodePlanMinOn(kind, ref, subject, chapterId, key) {
@@ -1821,11 +1938,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   /** 兼容旧名：某学科在指定日期的计划投入分钟 */
   function subjectPlanMinOn(subject, key) { return nodePlanMinOn('subject', subject, null, null, key); }
-  /** 一组计划ID的平均每日计划投入（基于未来 12 周窗口均值，覆盖完整周循环） */
+  /** 一组计划ID的平均每日计划投入（基于未来 12 周窗口均值，覆盖完整周循环）
+   *  同一计划集合的均值只算一次（小节常共享同一组关联计划）。 */
+  var dailyAvgMemo = {};
+  function invalidateDailyAvgMemo() { dailyAvgMemo = {}; }
   function nodeDailyAvgMinFor(planIds) {
+    var ids = asArray(planIds);
+    if (!ids.length) return 0;
+    var memoKey = ids.join(',');
+    var hit = dailyAvgMemo[memoKey];
+    if (hit !== undefined) return hit;
     var win = 84, cur = today(), sum = 0;
-    for (var i = 0; i < win; i++) { sum += planMinOnForIds(planIds, cur); cur = shiftDays(cur, 1); }
-    return Math.round(sum / win * 10) / 10;
+    for (var i = 0; i < win; i++) { sum += planMinOnForIds(ids, cur); cur = shiftDays(cur, 1); }
+    var avg = Math.round(sum / win * 10) / 10;
+    dailyAvgMemo[memoKey] = avg;
+    return avg;
   }
   /** 某节点的平均每日计划投入 */
   function nodeDailyAvgMin(kind, ref, subject, chapterId) {
@@ -1836,10 +1963,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /** 单节点 ETA 推算：给定剩余分钟与有效计划ID，逐日模拟至归零（窗口上限 730 天）。
       返回 {status, remainingMin, boundPlans, dailyAvgMin, estDays, etaDate, etaDateISO}
       status: done | on-track | no-plan | far */
-  /** 两个日期键之间的日历天数差（b - a，>=0），用于由链式推算结果反推 estDays */
+  /** 两个日期键之间的日历天数差（b - a，>=0），用于由链式推算结果反推 estDays。
+   *  非法日期键不再让 NaN 流入 estDays（会在 UI 上显示成「约 NaN 天」），统一按 0 处理。 */
   function daysBetweenKeys(a, b) {
-    if (!a || !b) return null;
-    var da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+    if (!isDateKey(a) || !isDateKey(b)) return 0;
+    var da = new Date(Number(a.slice(0, 4)), Number(a.slice(5, 7)) - 1, Number(a.slice(8, 10)));
+    var db = new Date(Number(b.slice(0, 4)), Number(b.slice(5, 7)) - 1, Number(b.slice(8, 10)));
     var d = Math.round((db.getTime() - da.getTime()) / 86400000);
     return d < 0 ? 0 : d;
   }
@@ -2029,6 +2158,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var t = store.timer;
     if (!t) return 0;
     var extra = t.running ? (Date.now() - t.startedAt) / 1000 : 0;
+    // 系统时钟回拨（手动改时间、时区切换、NTP 校正）会让 extra 变负；
+    // 单段时长上限 24 小时，防止时钟前跳导致计时出现 absurd 值。
+    if (!(extra > 0)) extra = 0;
+    if (extra > 86400) extra = 86400;
     return Math.max(0, Math.floor(t.accSec + extra));
   }
   function startTimer(planId, key) {
@@ -2036,9 +2169,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       App.toast('已有任务在计时，请先结束当前任务', 'warn');
       return false;
     }
+    if (!planId) return false;
     if (!store.timer) {
       store.timer = { planId: planId, date: key, startedAt: Date.now(), firstStartedAt: Date.now(), accSec: 0, running: true };
+    } else if (store.timer.running) {
+      // 已在计时中：不能重置 startedAt，否则本段已累计的时长会被静默丢弃
+      return true;
     } else {
+      // 从暂停恢复：accSec 已在 pauseTimer 中结算，这里只重置本段起点
       store.timer.startedAt = Date.now();
       store.timer.running = true;
     }
@@ -2049,7 +2187,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function pauseTimer() {
     var t = store.timer;
     if (!t || !t.running) return;
-    t.accSec = Math.floor(t.accSec + (Date.now() - t.startedAt) / 1000);
+    var seg = (Date.now() - t.startedAt) / 1000;
+    if (!(seg > 0)) seg = 0;
+    if (seg > 86400) seg = 86400;
+    t.accSec = Math.floor(t.accSec + seg);
     t.running = false;
     saveStore();
     App.syncTimerUI();
@@ -2062,19 +2203,45 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   /* ------------------------------------------------ 提示 / 弹窗组件 */
   var toastTimers = [];
-  function toast(msg, type) {
+  /* toast：支持三种调用形式
+       toast('文本')                          纯提示
+       toast('文本', 'ok'|'warn'|'error')      带样式类型
+       toast('文本', 'warn', {actionText,onAction,duration})   带操作按钮（撤销）
+       toast({text, type, actionText, onAction, duration})     对象形式
+     传字符串时行为与原来完全一致。 */
+  function toast(msg, type, opt) {
     var root = $('#toast-root');
     if (!root) return;
+    if (msg && typeof msg === 'object') { opt = msg; msg = opt.text; type = opt.type; }
+    opt = opt || {};
     var div = document.createElement('div');
-    div.className = 'toast' + (type ? ' ' + type : '');
-    div.textContent = msg;
+    div.className = 'toast' + (type ? ' ' + type : '') + (opt.actionText ? ' has-action' : '');
+    if (opt.actionText) {
+      var span = document.createElement('span');
+      span.className = 'toast-text';
+      span.textContent = msg == null ? '' : String(msg);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'toast-action';
+      btn.textContent = opt.actionText;
+      btn.addEventListener('click', function () {
+        // 先移除再回调：避免回调里再次 toast 时旧节点残留
+        if (div.parentNode) div.parentNode.removeChild(div);
+        try { if (typeof opt.onAction === 'function') opt.onAction(); } catch (e) { console.error(e); }
+      });
+      div.appendChild(span);
+      div.appendChild(btn);
+    } else {
+      div.textContent = msg == null ? '' : String(msg);
+    }
     root.appendChild(div);
+    var dur = Number(opt.duration) > 0 ? Number(opt.duration) : 2400;
     var t = setTimeout(function () {
       div.style.transition = 'opacity .3s, transform .3s';
       div.style.opacity = '0';
       div.style.transform = 'translateY(-10px)';
       setTimeout(function () { if (div.parentNode) div.parentNode.removeChild(div); }, 320);
-    }, 2400);
+    }, dur);
     toastTimers.push(t);
     if (toastTimers.length > 20) toastTimers.shift();
   }
@@ -2346,7 +2513,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     SUBJECT_PRESETS: SUBJECT_PRESETS, TIPS: TIPS, NAV: NAV,
     // 工具
     $: $, $$: $$, esc: esc, uid: uid, clamp: clamp, pad2: pad2, asText: asText,
-    dateKey: dateKey, today: today, parseKey: parseKey, shiftDays: shiftDays,
+    dateKey: dateKey, today: today, parseKey: parseKey, isDateKey: isDateKey, shiftDays: shiftDays,
     weekdayOf: weekdayOf, fmtDateCN: fmtDateCN, fmtDateFull: fmtDateFull, fmtDateISO: fmtDateISO, relDayLabel: relDayLabel,
     fmtDur: fmtDur, fmtClock: fmtClock, minutesOf: minutesOf, fmtTimeOfDay: fmtTimeOfDay,
     isTimeStr: isTimeStr, timeToMin: timeToMin, masteryInfo: masteryInfo, colorFor: colorFor,
@@ -2364,10 +2531,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     addChapter: addChapter, deleteChapter: deleteChapter, chaptersProgress: chaptersProgress,
     subjectsOfChapters: subjectsOfChapters, subjectsProgress: subjectsProgress,
     sectionDoneDates: sectionDoneDates, isSectionDone: isSectionDone,
+    sectionDoneState: sectionDoneState, invalidateDoneIndex: invalidateDoneIndex,
+    daysBetweenKeys: daysBetweenKeys, scheduleChain: scheduleChain,
     // 预计完成日期（ETA）：节点(学科/大章/小节) ↔ 计划 逐节点独立关联
     effectiveSubjectPlanIds: effectiveSubjectPlanIds, setSubjectPlans: setSubjectPlans,
     effectiveNodePlanIds: effectiveNodePlanIds, setNodePlans: setNodePlans,
     nodePlanMinOn: nodePlanMinOn, nodeDailyAvgMin: nodeDailyAvgMin,
+    planMinOnForIds: planMinOnForIds, nodeDailyAvgMinFor: nodeDailyAvgMinFor,
+    invalidatePlanMemo: invalidatePlanMemo, invalidateDailyAvgMemo: invalidateDailyAvgMemo,
+    invalidatePlanMemo: invalidatePlanMemo, invalidateDailyAvgMemo: invalidateDailyAvgMemo,
     subjectPlanMinOn: subjectPlanMinOn, subjectDailyAvgMin: subjectDailyAvgMin,
     subjectETAs: subjectETAs, nodeETAs: nodeETAs,
     daySel: daySel, dayManuals: dayManuals, dayDoneMap: dayDoneMap,
@@ -2385,7 +2557,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // 跨天遗留计时：自动暂停并提示
       if (store.timer && store.timer.date !== today()) {
         if (store.timer.running) {
-          store.timer.accSec = Math.floor(store.timer.accSec + (Date.now() - store.timer.startedAt) / 1000);
+          var seg = (Date.now() - store.timer.startedAt) / 1000;
+          if (!(seg > 0)) seg = 0;
+          if (seg > 86400) seg = 86400;
+          store.timer.accSec = Math.floor(store.timer.accSec + seg);
           store.timer.running = false;
           saveStore();
         }
@@ -3236,7 +3411,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<td data-label="时长" class="td-mono"><b>' + esc(A.fmtDur(r.durationSec)) + '</b></td>' +
         '<td data-label="掌握度">' + m.emoji + ' ' + esc(m.text) + '</td>' +
         '<td data-label="备注" class="cell-note td-dim">' + (r.note ? esc(r.note) : '—') + '</td>' +
-        '<td data-label="操作"><button class="btn btn-sm btn-danger" data-act="rec-delete" data-id="' + r.id + '">删除</button></td>' +
+        '<td data-label="操作"><div class="row-actions">' +
+        '<button class="btn btn-sm" data-act="rec-edit" data-id="' + esc(r.id) + '">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" data-act="rec-delete" data-id="' + esc(r.id) + '">删除</button>' +
+        '</div></td>' +
         '</tr>';
     }).join('');
 
@@ -3293,14 +3471,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }).join('');
 
       var orphan = recs.filter(function (r) { return !plans.some(function (p) { return p.id === r.planId; }); });
-      var orphanHTML = orphan.length ? orphan.map(function (r) {
+        var orphanHTML = orphan.length ? orphan.map(function (r) {
         return '<div class="plan-item done" style="margin-bottom:8px">' +
           '<div class="plan-item-head"><div class="plan-task" style="font-size:13.5px">' + esc(r.task) + '</div>' +
           '<span class="tag tag-done">✓ ' + esc(A.fmtDur(r.durationSec)) + '</span></div>' +
           '<div class="plan-meta">' + subjectTag(r.subject) + masteryTag(r.mastery) +
           '<span class="tag">计划已删除</span></div>' +
           (r.focus ? '<div class="plan-focus"><span class="fl">今日具体项目：</span>' + esc(r.focus) + '</div>' : '') +
-          (r.note ? '<div class="plan-note">备注：' + esc(r.note) + '</div>' : '') + '</div>';
+          (r.note ? '<div class="plan-note">备注：' + esc(r.note) + '</div>' : '') +
+          '<div class="plan-actions">' +
+          '<button class="btn btn-sm" data-act="rec-edit" data-id="' + esc(r.id) + '">编辑</button>' +
+          '<button class="btn btn-sm btn-danger" data-act="rec-delete" data-id="' + esc(r.id) + '">删除</button>' +
+          '</div></div>';
       }).join('') : '';
 
       return '<div class="card rise mb-16" style="--d:' + Math.min(0.3, idx * 0.04).toFixed(2) + 's">' +
@@ -3646,28 +3828,47 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     }
     var fileSubj = subjectFromName(fileName);
-    var chapters = [], cur = null, curTitle = '';
-    for (var i = start; i < rows.length; i++) {
-      var row = rows[i] || [];
+    var chapters = [], cur = null;
+    for (var ri = start; ri < rows.length; ri++) {
+      var row = rows[ri] || [];
       var chapName = String(row[colChap] || '').trim();
       var secName = String(row[colSec] || '').trim();
       if (!chapName && !secName) continue;
       var subj = (colSubj >= 0) ? String(row[colSubj] || '').trim() : '';
       subj = subj || fileSubj;
-      if (chapName && chapName !== curTitle) {
-        curTitle = chapName;
-        cur = { id: A.uid('chap'), title: chapName, subject: subj, sections: [], note: '', createdAt: Date.now(), updatedAt: Date.now() };
+      /* 归章须同时匹配学科：Excel 里「第一章」这类章名在不同学科间会重复，
+         只比章名会把不同学科的同名章并成一章，导致学科归属被后一个学科覆盖。 */
+      var reusable = cur && chapName && cur.title === chapName &&
+        (cur.subject === subj || cur.subject === '未分类');
+      if (!reusable) {
+        cur = {
+          id: A.uid('chap'), title: chapName || '未分类', subject: subj,
+          sections: [], note: '', createdAt: Date.now(), updatedAt: Date.now()
+        };
         chapters.push(cur);
-      } else if (!cur) {
-        cur = { id: A.uid('chap'), title: '未分类', subject: subj, sections: [], note: '', createdAt: Date.now(), updatedAt: Date.now() };
-        chapters.push(cur);
-      } else if (subj && subj !== '未分类' && cur.subject === '未分类') {
+      } else if (subj && cur.subject === '未分类') {
         cur.subject = subj;
       }
       if (secName) cur.sections.push({ id: A.uid('sec'), title: secName, estMin: parseMin(row[colMin]) });
     }
     chapters = chapters.filter(function (ch) { return ch.sections.length; });
-    return chapters.length ? chapters : null;
+    /* 兜底：同一导入批次内若仍出现 (学科,章名) 完全重复（表头不规范导致），
+       合并小节，避免同一章在库里裂成两份、进度被拆成两半。 */
+    var merged = [], byKey = {};
+    chapters.forEach(function (ch) {
+      var k = (ch.subject || '未分类') + ' || ' + ch.title;
+      if (byKey[k]) {
+        var t = byKey[k];
+        ch.sections.forEach(function (s) {
+          var dup = t.sections.some(function (x) { return x.title === s.title; });
+          if (!dup) t.sections.push(s);
+        });
+      } else {
+        byKey[k] = ch;
+        merged.push(ch);
+      }
+    });
+    return merged.length ? merged : null;
   }
 
   function handleImportFile(e) {
@@ -3887,7 +4088,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function openQuickTaskModal() {
     var now = new Date();
     var s = A.pad2(now.getHours()) + ':' + A.pad2(now.getMinutes());
-    var e = A.pad2((now.getHours() + 1) % 24) + ':' + A.pad2(now.getMinutes());
+    /* 结束时间取「当前时刻 + 1 小时」，跨零点时自然落到次日 00:xx。
+       不能用 (h+1)%23 这类写法，否则 23 点后会被拉回 23 点，与开始时间相同。 */
+    var end = new Date(now.getTime() + 3600000);
+    var e = A.pad2(end.getHours()) + ':' + A.pad2(end.getMinutes());
     A.openModal({
       title: '今日临时任务',
       sub: '仅在今天出现（单次计划），完成后同样进入统计',
@@ -4274,7 +4478,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var box = $('#mastery-pick');
     if (box) $$('button', box).forEach(function (b) { b.classList.remove('on'); });
     n.classList.add('on');
-    if (ui.finishState) ui.finishState.mastery = Number(n.getAttribute('data-v'));
+    var v = Number(n.getAttribute('data-v'));
+    // 结束打卡与编辑记录共用同一套掌握度选择器，两者都要记住选择
+    if (ui.finishState) ui.finishState.mastery = v;
+    if (recEditState) recEditState.mastery = v;
   };
   ACT['finish-submit'] = function (form) {
     var st = ui.finishState;
@@ -4316,8 +4523,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (!subject) { A.toast('请填写科目', 'warn'); return; }
     if (!task) { A.toast('请填写任务描述', 'warn'); return; }
     if (!A.isTimeStr(st)) st = '20:00';
+    /* 跨零点（23:30 → 00:30）在「单条计划 = 一个时段」的模型里无法正确表达：
+       时长会算成负值、回退到默认权重，列表里也会显示成结束早于开始。
+       这里统一收敛到次日 23:59 之前的合法时段，保证 startTime < endTime。 */
     if (!A.isTimeStr(et) || A.timeToMin(et) <= A.timeToMin(st)) {
-      et = A.pad2(A.clamp(Number(st.split(':')[0]) + 1, 0, 23)) + ':' + st.split(':')[1];
+      var addH = A.clamp(Number(st.split(':')[0]) + 1, 0, 22); // 23 点起始 → 收敛到 22→23
+      et = A.pad2(addH) + ':' + st.split(':')[1];
+      if (A.timeToMin(et) <= A.timeToMin(st)) et = A.pad2(A.clamp(addH + 1, 0, 23)) + ':' + st.split(':')[1];
     }
     var t = A.today();
     var plan = {
@@ -4356,16 +4568,201 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     else { ui.filters.from = A.shiftDays(A.today(), -(d - 1)); ui.filters.to = A.today(); }
     renderHistory($('#view-history'));
   };
-  ACT['rec-delete'] = function (n) {
-    var id = n.getAttribute('data-id');
-    A.confirmModal({ title: '删除这条打卡记录？', danger: true, okText: '删除', sub: '删除后统计数据会同步变化' }, function () {
-      A.markDeleted('records', id); // 记录删除墓碑，云同步时传播删除
-      S.records = S.records.filter(function (r) { return r.id !== id; });
-      A.save();
+  /* ================================================================
+     打卡记录：编辑 + 删除撤销
+     - 编辑：改内容字段（时长/掌握度/项目/备注/时段），保存后即时刷新；取消不写入
+     - 删除撤销：先从内存摘除并给 5 秒撤销窗口，超时后才真正落盘移除
+     单人本地场景，不涉及并发与多端，故用简单的模块级状态即可。
+     ================================================================ */
+  var REC_UNDO_MS = 5000;          // 撤销窗口时长
+  var recUndo = null;              // { record, timer, toastText }
+  var recEditState = null;         // { id, date, mastery }
+
+  /** 彻底移除一条记录（撤销窗口结束后调用）：写墓碑 + 落盘 + 刷新
+   *  注意：记录在撤销窗口内已从 S.records 摘除，此处不能再用「是否还在数组里」
+   *  作为前置判断，否则墓碑永远不会被写入。 */
+  function finalizeRecordRemoval(id) {
+    S.records = S.records.filter(function (r) { return r.id !== id; });
+    // 墓碑在真正移除时才写：撤销窗口内不写，否则撤销后仍会被同步当作已删除
+    A.markDeleted('records', id);
+    A.save();
+    A.renderNav();
+    refreshHistoryBody();
+  }
+
+  /** 撤销删除：把记录按原位置放回，清除墓碑 */
+  function undoRecordRemoval() {
+    if (!recUndo) return;
+    var rec = recUndo.record;
+    var id = rec.id;
+    clearTimeout(recUndo.timer);
+    // 已存在同 id（极少见，如期间又导入备份）则不重复插入
+    if (!S.records.some(function (r) { return r.id === id; })) {
+      // 尽量还原到原下标，保持列表排序稳定
+      var at = recUndo.index;
+      if (at >= 0 && at <= S.records.length) S.records.splice(at, 0, rec);
+      else S.records.unshift(rec);
+    }
+    // 撤销即撤销删除：清掉墓碑，否则下次同步会把刚恢复的记录再删掉
+    if (S.tombstones && S.tombstones.records) delete S.tombstones.records[id];
+    recUndo = null;
+    A.save();
+    A.renderNav();
+    refreshHistoryBody();
+    A.toast('已恢复该记录', 'ok');
+  }
+
+  /** 删除一条记录并开启撤销窗口 */
+  function requestRecordRemoval(id) {
+    var idx = -1;
+    for (var i = 0; i < S.records.length; i++) { if (S.records[i].id === id) { idx = i; break; } }
+    if (idx < 0) return;
+    var rec = S.records[idx];
+    // 同一时刻只保留一个撤销窗口：若已有待撤销项，先将其彻底移除
+    if (recUndo) {
+      var prevId = recUndo.record.id;
+      clearTimeout(recUndo.timer);
+      finalizeRecordRemoval(prevId);
+    }
+    // 先从内存摘除（界面即时反馈），此时不写墓碑、不依赖落盘成功
+    S.records.splice(idx, 1);
+    A.invalidateDoneIndex();
+    A.renderNav();
+    refreshHistoryBody();
+    var ok = A.save();
+    if (!ok) {
+      // 落盘失败：立即回滚内存，避免「界面已删但实际没存」的错位
+      S.records.splice(Math.min(idx, S.records.length), 0, rec);
+      A.invalidateDoneIndex();
       A.renderNav();
       refreshHistoryBody();
-      A.toast('记录已删除', 'ok');
+      A.toast('删除失败：本地存储写入失败，已恢复', 'warn');
+      return;
+    }
+    recUndo = { record: rec, index: idx, timer: null };
+    recUndo.timer = setTimeout(function () {
+      // 超时：彻底移除（写墓碑）
+      var theId = recUndo ? recUndo.record.id : null;
+      recUndo = null;
+      if (theId) finalizeRecordRemoval(theId);
+    }, REC_UNDO_MS);
+    A.toast('记录已删除，' + Math.round(REC_UNDO_MS / 1000) + ' 秒内可撤销', 'warn', {
+      duration: REC_UNDO_MS, actionText: '撤销', onAction: undoRecordRemoval
     });
+  }
+
+  /* ---------- 记录编辑弹窗 ---------- */
+  function openEditRecordModal(id) {
+    var rec = null;
+    for (var i = 0; i < S.records.length; i++) { if (S.records[i].id === id) { rec = S.records[i]; break; } }
+    if (!rec) { A.toast('记录不存在或已删除', 'warn'); return; }
+    var chosen = A.clamp(Number(rec.mastery) || 3, 1, 5);
+    recEditState = { id: id, mastery: chosen };
+    var plan = A.planById(rec.planId);
+    A.openModal({
+      title: '编辑打卡记录',
+      sub: (plan ? plan.task : rec.task) + ' · ' + A.fmtDateCN(rec.date),
+      body:
+        '<form data-submit="rec-edit-submit">' +
+        '<div class="form-row"><label class="lbl">本次时长（分钟）</label>' +
+        '<input class="input" type="number" name="minutes" min="0" step="1" value="' +
+        Math.max(0, Math.round((Number(rec.durationSec) || 0) / 60)) + '" data-autofocus>' +
+        '<div class="hint">原始计时 ' + esc(A.fmtDur(rec.durationSec)) + '，可在此修正。</div></div>' +
+
+        '<div class="form-row"><label class="lbl">实际开始</label>' +
+        '<input class="input" type="time" name="startedTime" value="' + esc(A.fmtTimeOfDay(rec.startedAt)) + '"></div>' +
+        '<div class="form-row"><label class="lbl">实际结束</label>' +
+        '<input class="input" type="time" name="endedTime" value="' + esc(A.fmtTimeOfDay(rec.endedAt)) + '"></div>' +
+
+        '<div class="form-row"><label class="lbl">掌握程度<span class="req">*</span></label>' +
+        '<div class="mastery-grid" id="mastery-pick">' +
+        A.MASTERY.map(function (m) {
+          return '<button type="button" data-act="pick-mastery" data-v="' + m.v + '"' + (m.v === chosen ? ' class="on"' : '') + '>' +
+            '<span class="m-emoji">' + m.emoji + '</span><span class="m-text">' + m.text + '</span></button>';
+        }).join('') + '</div></div>' +
+
+        '<div class="form-row"><label class="lbl">今日学习具体项目</label>' +
+        '<textarea class="textarea" name="focus" placeholder="这次具体学了什么？">' + esc(rec.focus || '') + '</textarea></div>' +
+        '<div class="form-row"><label class="lbl">备注 / 复盘</label>' +
+        '<textarea class="textarea" name="note" placeholder="难点、错题、下一步计划……">' + esc(rec.note || '') + '</textarea></div>' +
+
+        '<div class="modal-foot">' +
+        '<button type="button" class="btn" data-act="modal-close">取消</button>' +
+        '<button type="submit" class="btn btn-primary">' + ic('ic-check', 16) + '保存修改</button>' +
+        '</div></form>',
+      maskClose: false,
+      onMount: function (mask) {
+        // 关闭（含取消/Esc）一律不写入：仅重置编辑态
+        var cancel = mask.querySelector('[data-act="modal-close"]');
+        if (cancel) cancel.addEventListener('click', function () { recEditState = null; });
+      }
+    });
+  }
+
+  /** 把 HH:MM 转成当天时间戳（用于覆盖 startedAt/endedAt 的时分） */
+  function timeStrToStamp(baseTs, hhmm) {
+    if (!A.isTimeStr(hhmm)) return null;
+    var d = new Date(Number(baseTs) || Date.now());
+    var p = String(hhmm).split(':');
+    d.setHours(Number(p[0]), Number(p[1]), 0, 0);
+    var t = d.getTime();
+    return isFinite(t) ? t : null;
+  }
+
+  ACT['rec-edit'] = function (n) {
+    openEditRecordModal(n.getAttribute('data-id'));
+  };
+  ACT['rec-edit-submit'] = function (form) {
+    var st = recEditState;
+    if (!st) { A.closeModal(); return; }
+    var rec = null;
+    for (var i = 0; i < S.records.length; i++) { if (S.records[i].id === st.id) { rec = S.records[i]; break; } }
+    if (!rec) { recEditState = null; A.closeModal(); A.toast('记录已不存在', 'warn'); return; }
+
+    var minsRaw = Number(form.querySelector('[name="minutes"]').value);
+    var mins = isFinite(minsRaw) && minsRaw >= 0 ? Math.round(minsRaw) : Math.round((Number(rec.durationSec) || 0) / 60);
+    var startedAt = timeStrToStamp(rec.startedAt, form.querySelector('[name="startedTime"]').value);
+    var endedAt = timeStrToStamp(rec.endedAt, form.querySelector('[name="endedTime"]').value);
+    if (startedAt === null) startedAt = rec.startedAt;
+    if (endedAt === null) endedAt = rec.endedAt;
+    if (endedAt < startedAt) endedAt = startedAt; // 结束早于开始：收敛为同时刻，不产生负区间
+    var focus = String(form.querySelector('[name="focus"]').value || '').trim();
+    var note = String(form.querySelector('[name="note"]').value || '').trim();
+
+    // 先备份原值，落盘失败时回滚
+    var backup = {
+      durationSec: rec.durationSec, mastery: rec.mastery, note: rec.note,
+      focus: rec.focus, startedAt: rec.startedAt, endedAt: rec.endedAt, updatedAt: rec.updatedAt
+    };
+    rec.durationSec = mins * 60;
+    rec.mastery = A.clamp(Number(st.mastery) || 3, 1, 5);
+    rec.note = note;
+    rec.focus = focus;
+    rec.startedAt = startedAt;
+    rec.endedAt = endedAt;
+    rec.updatedAt = Date.now();
+
+    var okSave = A.save();
+    if (!okSave) {
+      // 落盘失败：逐字段回滚，界面保持原值
+      rec.durationSec = backup.durationSec; rec.mastery = backup.mastery; rec.note = backup.note;
+      rec.focus = backup.focus; rec.startedAt = backup.startedAt; rec.endedAt = backup.endedAt;
+      rec.updatedAt = backup.updatedAt;
+      A.toast('保存失败：本地存储写入失败，已还原', 'warn');
+      return;
+    }
+    // 记录内 focus 与当日计划共享存储，编辑后同步过去保持一致
+    if (rec.planId) A.setFocus(rec.date, rec.planId, focus);
+    recEditState = null;
+    A.closeModal();
+    A.toast('记录已更新', 'ok');
+    A.renderNav();
+    refreshHistoryBody();
+    if (ui.route === 'checkin') rerenderCurrent();
+  };
+
+  ACT['rec-delete'] = function (n) {
+    requestRecordRemoval(n.getAttribute('data-id'));
   };
   ACT['export-csv'] = function () { exportCSV(); };
   ACT['backup-json'] = function () {
@@ -4432,7 +4829,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     A.confirmModal({
       title: '清空全部数据？', danger: true, okText: '确认清空',
       body: '<div class="card-desc">将删除 ' + S.records.length + ' 条打卡记录、' + S.plans.length +
-        ' 条计划与全部归档，且无法撤销。建议先「备份 JSON」。</div>'
+        ' 条计划、' + S.chapters.length + ' 份章节计划与全部归档，且无法撤销。建议先「备份 JSON」。</div>'
     }, function () {
       // 仅清空内存中的全部数据并重渲染界面，不再刷新页面。
       // 旧实现在移除数据后会 location.reload()，刷新会使云同步模块进入“锁定”状态，
@@ -4443,8 +4840,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       S.plans = [];
       S.records = [];
       S.days = {};
+      S.chapters = [];
+      S.nodePlans = {};
       S.timer = null;
-      S.tombstones = { plans: {}, records: {} };
+      S.tombstones = { plans: {}, records: {}, chapters: {} };
+      // 章节完成索引与小节完成状态都基于 days，清空后必须失效，否则界面仍显示旧进度
+      if (A.invalidateDoneIndex) A.invalidateDoneIndex();
+      if (A.invalidatePlanMemo) A.invalidatePlanMemo();
+      if (A.invalidateDailyAvgMemo) A.invalidateDailyAvgMemo();
+      if (A.ui) { A.ui.form = null; A.ui.itemsState = null; A.ui.finishState = null; A.ui.etaAssoc = null; A.ui.etaAssocSel = null; }
       try { localStorage.removeItem(A.STORE_KEY); } catch (e) { }
       A.renderNav();
       if (A.navigate) A.navigate();
@@ -4578,6 +4982,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SCHEMA = 1;
   var CLIENT_TAG = 'study-checkin-web';
   var PBKDF2_ITER = 200000;
+  /* 单次 GitHub 请求超时（毫秒）。fetch 无内置超时，若网络挂起会让
+     状态永远停在「同步中」，并因 onLocalChange 的 syncing 判断而彻底失去自动同步。 */
+  var REQ_TIMEOUT = 30000;
 
   /* ----------------------------------------------------- 内部状态 */
   var session = null; // { token, gistId, autoSync, pass }
@@ -4585,6 +4992,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var state = { status: 'idle', message: '', lastSyncAt: 0, lastPullAt: 0, lastError: '' };
   var autoTimer = null;
   var wrapped = false;
+  var pendingPush = false; // 同步进行中产生的本地改动，等同步结束后补传
+  var inFlight = null;     // 正在进行的同步任务，避免并发 push 造成 rev 竞争
 
   /* ============================================================ 加密 */
   function bufToB64(buf) {
@@ -4865,6 +5274,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     s.updatedAt = merged.updatedAt || s.updatedAt;
     s.meta = merged.meta || {};
     if (!s.meta.sync) s.meta.sync = { rev: 0, lastSyncAt: 0, lastPullAt: 0 };
+    // days 被整体替换，小节完成索引必须失效，否则界面仍显示合并前的完成进度
+    if (A.invalidateDoneIndex) A.invalidateDoneIndex();
     origSave();
   }
 
@@ -4883,6 +5294,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (typeof fetch !== 'function') return Promise.reject(new Error('当前环境无法联网（fetch 不可用）'));
     var init = { method: opt.method || 'GET', headers: ghHeaders() };
     if (opt.body) init.body = opt.body;
+    // 超时兜底：到点主动中断，避免请求悬挂导致同步状态卡死
+    var timedOut = false;
+    var timer = setTimeout(function () {
+      timedOut = true;
+      if (ctl.abort) { try { ctl.abort(); } catch (e) { } }
+    }, REQ_TIMEOUT);
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    if (ctl) init.signal = ctl.signal;
     return fetch(GH_API + path, init).then(function (res) {
       var ct = res.headers && res.headers.get ? res.headers.get('content-type') : '';
       var p = (ct && ct.indexOf('application/json') >= 0)
@@ -4899,7 +5318,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         }
         return body;
       });
-    });
+    }).catch(function (e) {
+      if (timedOut) {
+        var te = new Error('网络请求超时（' + Math.round(REQ_TIMEOUT / 1000) + ' 秒无响应）');
+        te.timeout = true;
+        throw te;
+      }
+      if (e && e.name === 'AbortError') {
+        var ae = new Error('请求已取消');
+        ae.timeout = true;
+        throw ae;
+      }
+      throw e;
+    }).then(function (v) { clearTimeout(timer); return v; },
+      function (err) { clearTimeout(timer); throw err; });
   }
 
   function validateGist() {
@@ -5002,8 +5434,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   /* ============================================================ 同步操作 */
+  /** 互斥包装：同一时刻只允许一个同步任务在飞。
+      push 与 pull 都会「读云端 → 合并 → 写云端」，并发执行时后写者会覆盖前写者的合并结果，
+      表现为随机丢记录（rev 竞争）。这里让后来的调用直接复用进行中的任务。 */
+  function exclusive(task) {
+    if (inFlight) return inFlight;
+    inFlight = task().then(
+      function (v) { inFlight = null; flushPending(); return v; },
+      function (e) { inFlight = null; flushPending(); throw e; });
+    return inFlight;
+  }
   function push(opts) {
     opts = opts || {};
+    /* force（恢复备份 / 清空后覆盖云端）必须独占执行：若复用进行中的普通同步，
+       本地快照就不会被写回云端，「已清空/已恢复」实际未生效。 */
+    if (opts.force) {
+      var run = doPush(opts);
+      return run.then(function (v) { inFlight = null; return v; },
+        function (e) { inFlight = null; throw e; });
+    }
+    return exclusive(function () { return doPush(opts); });
+  }
+  function pull() {
+    return exclusive(function () { return doPull(); });
+  }
+
+  function doPush(opts) {
     if (!session) return Promise.reject(new Error('尚未连接云同步'));
     setState('syncing', '正在上传…');
     return ghFetch('/gists/' + session.gistId).then(function (gist) {
@@ -5055,7 +5511,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
   }
 
-  function pull() {
+  function doPull() {
     if (!session) return Promise.reject(new Error('尚未连接云同步'));
     setState('syncing', '正在拉取云端…');
     return ghFetch('/gists/' + session.gistId).then(function (gist) {
@@ -5095,11 +5551,23 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function onLocalChange() {
     if (A._restoring) return; // 恢复备份期间不触发自动合并上传，避免云端旧墓碑把恢复的数据再次删除
     if (!session || !session.autoSync) return;
-    if (state.status === 'syncing') return;
     clearTimeout(autoTimer);
+    /* 同步进行中不丢弃本次改动，而是记下 pending：旧实现直接 return，
+       导致「同步耗时 > 2.5s」时，同步窗口内的编辑永远不会上传云端。 */
+    if (state.status === 'syncing') { pendingPush = true; return; }
     autoTimer = setTimeout(function () {
       push().then(function () { }).catch(function (e) { reportError(e); });
     }, 2500);
+  }
+  /** 同步结束后检查是否有同步窗口内产生的改动，有则补一次上传 */
+  function flushPending() {
+    if (!pendingPush) return;
+    pendingPush = false;
+    if (!session || !session.autoSync || A._restoring) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(function () {
+      push().then(function () { }).catch(function (e) { reportError(e); });
+    }, 800);
   }
 
   /* ============================================================ UI：状态机 */
