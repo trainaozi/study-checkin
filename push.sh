@@ -24,15 +24,19 @@ COMMIT_MESSAGE="${COMMIT_MESSAGE:-}"     # 留空则自动生成
 # ---------------------------------------------------------------------------
 
 # ------------------------------ 终端配色 ------------------------------------
+#  约定：所有提示一律走 stderr。
+#  原因：stage_and_commit 用 msg="$(prompt_commit_message)" 捕获返回值，
+#  若提示混进 stdout 会被当作提交信息（曾导致提交记录变成整块面板文本）。
+#  正常运行时 stderr 同样显示在终端，不影响观感。
 if [ -t 1 ]; then
   R='\033[0;31m'; G='\033[0;32m'; Y='\033[0;33m'; B='\033[0;36m'; N='\033[0m'
 else
   R=''; G=''; Y=''; B=''; N=''
 fi
-ok()   { printf "${G}✔${N} %s\n" "$1"; }
-warn() { printf "${Y}!${N} %s\n" "$1"; }
-err()  { printf "${R}✘${N} %s\n" "$1"; }
-info() { printf "${B}›${N} %s\n" "$1"; }
+ok()   { printf "${G}✔${N} %s\n" "$1" >&2; }
+warn() { printf "${Y}!${N} %s\n" "$1" >&2; }
+err()  { printf "${R}✘${N} %s\n" "$1" >&2; }
+info() { printf "${B}›${N} %s\n" "$1" >&2; }
 
 # ------------------------------ 前置检查 ------------------------------------
 preflight() {
@@ -128,8 +132,24 @@ stage_and_commit() {
     fi
   fi
 
-  # 提交信息：优先用传入的，其次沿用上一次提交风格，最后自动生成
+  # 提交信息优先级：
+  #   1) 环境变量 COMMIT_MESSAGE（供自动化调用）
+  #   2) 交互式输入（终端下提示填写本次更新内容）
+  #   3) 沿用上一次提交信息
+  #   4) 按改动数量自动生成
   local msg="$COMMIT_MESSAGE"
+  if [ -z "$msg" ]; then
+    # 结果写全局变量而非 stdout：
+    # 若用 $(...) 接收，函数内的 exit 1 只退出子 shell，主流程会继续往下推送。
+    PROMPT_ABORTED=""
+    prompt_commit_message
+    if [ -n "$PROMPT_ABORTED" ]; then
+      err "$PROMPT_ABORTED"
+      echo "  提示：可用 COMMIT_MESSAGE=\"你的说明\" ./push.sh 直接指定，或 AUTO_COMMIT=no 仅推送。"
+      exit 1
+    fi
+    msg="$PROMPT_RESULT"
+  fi
   if [ -z "$msg" ]; then
     msg="$(git log -1 --pretty=%s 2>/dev/null | head -1)"
   fi
@@ -144,8 +164,69 @@ stage_and_commit() {
     echo "  可能是提交信息为空或含特殊字符，请换一条信息重试。"
     exit 1
   fi
-  ok "提交完成"
+  ok "提交完成：$msg"
   return 0
+}
+
+# ------------------------- 提交信息交互输入 --------------------------------
+#  结果写入全局变量（不使用 stdout，避免被 $(...) 捕获）：
+#    PROMPT_RESULT   —— 用户填写的提交信息
+#    PROMPT_ABORTED  —— 非空表示用户连续空输入、已放弃，调用方应退出
+#
+#  设计要点：
+#   - 非交互环境（管道、CI、cron）自动跳过，不阻塞等待输入
+#   - 空输入允许重试，连续 3 次为空则放弃（不静默用旧信息提交）
+#   - 去除首尾空格与空字节，避免 git commit 因参数异常失败
+#   - 函数内绝不 exit：$(...) 子 shell 会吞掉退出码导致主流程继续执行
+PROMPT_RESULT=""
+PROMPT_ABORTED=""
+prompt_commit_message() {
+  PROMPT_RESULT=""
+  PROMPT_ABORTED=""
+  # 非交互终端（无 tty）不打扰：CI/管道场景下自动跳过
+  if [ ! -t 0 ]; then
+    return 0
+  fi
+  if [ "$AUTO_COMMIT" != "yes" ]; then
+    return 0
+  fi
+
+  local n
+  n="$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')"
+  printf "${B}┌─ 本次更新内容（%s 个文件）${N}\n" "$n"
+  echo "  简短说明这次改了什么，会作为 Git 提交记录。"
+  # 显示改动概览帮助回忆
+  local summary
+  summary="$(git diff --cached --stat 2>/dev/null | tail -1)"
+  [ -n "$summary" ] && echo "  ${summary}"
+  echo
+
+  local input attempt
+  for attempt in 1 2 3; do
+    if [ $attempt -eq 1 ]; then
+      printf "${G}  >${N} "
+    else
+      printf "  ${G}(%s/3) 再输入一次 >${N} " "$attempt"
+    fi
+    # read 不带 -p（部分 sh 无此选项）；失败视为空输入继续重试
+    if ! IFS= read -r input; then
+      input=""
+    fi
+    # 去掉首尾空白
+    input="$(printf '%s' "$input" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    # 剔除空字节，防止 git commit 参数异常
+    input="$(printf '%s' "$input" | tr -d '\000')"
+
+    if [ -n "$input" ]; then
+      printf "└─ %s\n\n" "$input"
+      PROMPT_RESULT="$input"
+      return 0
+    fi
+    warn "内容不能为空，请填写本次更新了什么。"
+  done
+
+  PROMPT_ABORTED="连续 3 次未填写更新内容，已中止（避免提交无说明的记录）。"
+  return 1
 }
 
 # ------------------------------ 远程处理 ------------------------------------
@@ -361,6 +442,11 @@ main "$@"
 #       AUTO_COMMIT=no ./push.sh
 #     示例：推送 develop 分支并指定提交信息
 #       BRANCH=develop COMMIT_MESSAGE="修复打卡页布局" ./push.sh
+#
+#  【提交信息】脚本会先列出本次改动的文件，然后提示你填写「这次更新了什么」。
+#     输入直接回车 = 沿用上一次的提交信息风格（省事）
+#     连续 3 次留空 = 中止本次推送（避免产生无说明的提交记录）
+#     非交互环境（管道 / CI）自动跳过提问，不阻塞
 #
 #  【安全说明】
 #     - 脚本不会自动强推（--force）。远程有他人新提交时会中止并给出处置方案，
