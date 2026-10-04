@@ -45,6 +45,106 @@
   /* 次级面：列表行 / 分隔块，避免整屏只有一种白 */
   --surface-2: #F7FBFA;
 
+  /* ===== 主题令牌（亮色）
+     新增主题时只需要复制这一整块并改值，页面规则不用动。分五组：
+     ① 表面层级 ② 文字层级 ③ 线/边框 ④ 强调「底 + 字」成对 ⑤ 渐变与阴影
+     --surface-raised：按钮/chip/弹窗等「抬起来」的面（比卡片更实）
+     --surface-3    ：输入框、卡内小块
+     --field-bg*    ：表单控件底；--ring 是聚焦光环
+     --accent-fill / --accent-on：选中态/主按钮的「底色 + 其上文字」，必须成对使用  */
+  --surface-raised: #FFFFFF;
+  /* 卡片内嵌的「条目底」：比卡片略深/略浅一档的半透明面（历史明细里的今日项目小条） */
+  --surface-item: rgba(255, 255, 255, .7);
+  --surface-3: #FAFDFC;
+  --surface-hover: #FAFEFD;
+  --surface-sidebar: rgba(255, 255, 255, .9);
+  --surface-tabbar: rgba(255, 255, 255, .96);
+  --card-bg: rgba(255, 255, 255, .94);
+
+  --field-bg: #FCFEFD;
+  --field-bg-focus: #FFFFFF;
+  --field-bg-warm: #FFF9F6;
+  --ring: rgba(63, 191, 160, .16);
+
+  --line-accent: #CBE9E1;
+  --line-item: #E6F0EC;
+  --line-hero: #D6EBE5;
+  --line-coral: #FBDACC;
+  --line-amber: #F3DFA2;
+  --line-danger: #F6D6D4;
+  --surface-danger: #FFF6F5;
+  --strike: rgba(63, 191, 160, .6);
+
+  --accent-fill: var(--primary);
+  --accent-on: #FFFFFF;
+  --badge-bg: var(--secondary);
+  --badge-fg: #FFFFFF;
+
+  --violet-ink: #7C5EC0;
+  --amber-ink: #C68A1E;
+  --ok: #1F8B72;
+  --warn: #B8862B;
+  --danger: #D9534F;
+  --brand: #6D8BFF;
+
+  --overlay: rgba(38, 62, 68, .3);
+  --toast-bg: rgba(43, 66, 73, .92);
+  --toast-fg: #FFFFFF;
+  --toast-action-bg: rgba(255, 255, 255, .92);
+  --toast-action-fg: #D9603A;
+  --switch-knob: #FFFFFF;
+  --scrollbar-thumb: #D3E6E1;
+  --scrollbar-thumb-hover: #BCD9D2;
+  --ring-bg-on-hero: rgba(255, 255, 255, .9);
+  --tip-fg: #FFFFFF;
+  --tip-fg-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+  --tip-deco: rgba(255, 255, 255, .16);
+  --tip-mark-bg: rgba(255, 255, 255, .2);
+  --disabled-opacity: .5;
+  --focus-outline: var(--primary);
+
+  /* 渐变：整条渐变当一个令牌存，换主题时只改这里，不会退化成纯色 */
+  --grad-page: linear-gradient(165deg, #EFF6F4 0%, #F3F8FB 45%, #FAF6F2 100%);
+  --grad-brand: linear-gradient(135deg, var(--primary) 0%, #6FD8BE 55%, var(--secondary) 130%);
+  --grad-nav-active: linear-gradient(100deg, var(--primary-soft), #EAF7FF);
+  --grad-btn-primary: linear-gradient(120deg, var(--primary) 0%, #55CFB2 100%);
+  --grad-btn-secondary: linear-gradient(120deg, var(--secondary) 0%, #FFB295 100%);
+  --grad-hero: linear-gradient(135deg, #E9F8F3 0%, #E6F1FE 52%, #FFEFE6 100%);
+  --grad-tip: linear-gradient(135deg, #1B6E5B 0%, #237C67 46%, #2E9E83 100%);
+  --grad-task-block: linear-gradient(180deg, #E2F5EF 0%, #E9F2FB 100%);
+  --grad-timer: linear-gradient(105deg, var(--primary-soft), #EAF4FF);
+  --grad-mix-bar: linear-gradient(90deg, var(--primary), #7FD9C4);
+  --grad-focus: linear-gradient(100deg, var(--primary-soft-2), #F6FBFF);
+  --grad-mastery-on: linear-gradient(140deg, var(--primary-soft), #E9F5FF);
+  --grad-toast-ok: linear-gradient(120deg, var(--primary-dark), var(--primary));
+  --grad-toast-warn: linear-gradient(120deg, var(--secondary-ink), var(--secondary));
+
+  /* 阴影：暗色下要更深、更弱（深底上的黑影看不见），所以把色相抽出来 */
+  --shadow-brand: 0 6px 16px rgba(63, 191, 160, .28);
+  --shadow-brand-strong: 0 10px 22px rgba(63, 191, 160, .34);
+  --shadow-coral: 0 6px 16px rgba(255, 158, 122, .3);
+  --shadow-coral-strong: 0 10px 22px rgba(255, 158, 122, .36);
+  --shadow-tip: 0 10px 24px rgba(27, 110, 91, .22);
+
+  --select-arrow: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238AA3AB' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+
+  /* 图表与画布：Chart.js / 粒子背景在 JS 里取色，统一从 CSS 变量读，主题切换后重绘即可 */
+  --chart-text: #8AA3AB;
+  --chart-grid: #EFF5F4;
+  --chart-pie-border: #FFFFFF;
+  --chart-line: #3FBFA0;
+  --chart-line-2: #FF9E7A;
+  --chart-fill: rgba(63, 191, 160, .16);
+  --chart-fill-2: rgba(255, 158, 122, .12);
+  --chart-1: #C9D6DA; --chart-2: #9FD37E; --chart-3: #7FB3F5; --chart-4: #3FBFA0; --chart-5: #FF9E7A;
+  --pal-1: #3FBFA0; --pal-2: #FF9E7A; --pal-3: #7FB3F5; --pal-4: #B39BE8; --pal-5: #F7C56B;
+  --pal-6: #77CFE0; --pal-7: #F49AC1; --pal-8: #9FD37E; --pal-9: #E9A15C; --pal-10: #8AA3AB;
+  --particle-1: #3FBFA0; --particle-2: #7FB3F5; --particle-3: #FF9E7A; --particle-4: #B39BE8;
+  --particle-line-rgb: 63, 191, 160;
+  --particle-blob-1: rgba(63, 191, 160, 0.10);
+  --particle-blob-2: rgba(127, 179, 245, 0.10);
+  --particle-blob-3: rgba(255, 158, 122, 0.09);
+
   /* 圆角：外层大卡 22 / 内层块 16 / 小组件 12 / 小控件 10，四级刻度，不再散落 6~13px 的随手值 */
   --radius-lg: 22px;
   --radius: 16px;
@@ -87,7 +187,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(165deg, #EFF6F4 0%, #F3F8FB 45%, #FAF6F2 100%);
+  background: var(--grad-page);
   pointer-events: none;
 }
 
@@ -104,7 +204,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 button { cursor: pointer; border: none; background: none; }
 a { color: var(--primary-dark); text-decoration: none; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #D3E6E1; border-radius: 999px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------------------------------------------------------------- 布局 */
@@ -125,7 +225,7 @@ a { color: var(--primary-dark); text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(255, 255, 255, .9);
+  background: var(--surface-sidebar);
   /* 侧栏是固定大面板，背景粒子在其后移动会持续触发高斯模糊重栅格化；
      提高不透明度并去掉 blur，观感仍清爽，但空闲/滚动时省下整块面板的模糊合成。 */
   border-right: 1px solid var(--line);
@@ -140,10 +240,10 @@ a { color: var(--primary-dark); text-decoration: none; }
 .brand-logo {
   width: 40px; height: 40px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--primary) 0%, #6FD8BE 55%, var(--secondary) 130%);
+  background: var(--grad-brand);
   display: grid; place-items: center;
-  color: #fff;
-  box-shadow: 0 6px 16px rgba(63, 191, 160, .34);
+  color: var(--accent-on);
+  box-shadow: var(--shadow-brand);
   flex: 0 0 auto;
 }
 .brand-title { font-size: 16px; font-weight: 700; letter-spacing: .3px; line-height: 1.25; }
@@ -163,7 +263,7 @@ a { color: var(--primary-dark); text-decoration: none; }
 .nav-item svg { flex: 0 0 auto; opacity: .78; transition: opacity .22s; }
 .nav-item:hover { background: var(--primary-soft-2); color: var(--primary-dark); transform: translateX(2px); }
 .nav-item.active {
-  background: linear-gradient(100deg, var(--primary-soft), #EAF7FF);
+  background: var(--grad-nav-active);
   color: var(--primary-dark);
   font-weight: 600;
 }
@@ -180,8 +280,9 @@ a { color: var(--primary-dark); text-decoration: none; }
   min-width: 20px; height: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: var(--secondary);
-  color: #fff;
+  /* 橙色 = 未完成 / 待打卡语义，两个主题都必须保持橙色 */
+  background: var(--badge-bg);
+  color: var(--badge-fg);
   font-size: 11px; font-weight: 700;
   display: grid; place-items: center;
 }
@@ -245,7 +346,7 @@ a { color: var(--primary-dark); text-decoration: none; }
 
 /* ------------------------------------------------------------- 卡片 */
 .card {
-  background: rgba(255, 255, 255, .94);
+  background: var(--card-bg);
   /* 去掉 backdrop-filter：卡片在滚动页里大量出现，而背景粒子在动，
      每帧都要对每张卡背后的区域重新做高斯模糊，是滚动时最大的合成开销之一。
      把背景不透明度提到 .92 后，去掉模糊后观感几乎不变，但滚动 GPU 占用显著下降。 */
@@ -279,7 +380,7 @@ a { color: var(--primary-dark); text-decoration: none; }
 .kpi {
   position: relative; overflow: hidden;
   background-image: linear-gradient(150deg, var(--tint, rgba(47, 169, 141, .16)) 0%, rgba(255, 255, 255, 0) 62%);
-  border-color: rgba(223, 237, 233, .8);
+  border-color: var(--line-item);
 }
 .kpi-label { font-size: 11.5px; font-weight: 600; letter-spacing: .5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
 .kpi-value { font-size: 30px; font-weight: 700; letter-spacing: -1px; margin-top: 7px; font-variant-numeric: tabular-nums; color: var(--ink); }
@@ -293,8 +394,8 @@ a { color: var(--primary-dark); text-decoration: none; }
 .i-mint { background: var(--primary-soft); color: var(--primary-dark); }
 .i-coral { background: var(--secondary-soft); color: var(--secondary-ink); }
 .i-sky { background: var(--accent-soft); color: var(--accent-ink); }
-.i-violet { background: var(--violet-soft); color: #7C5EC0; }
-.i-amber { background: var(--amber-soft); color: #C68A1E; }
+.i-violet { background: var(--violet-soft); color: var(--violet-ink); }
+.i-amber { background: var(--amber-soft); color: var(--amber-ink); }
 
 /* ------------------------------------------------------------ 按钮 */
 .btn {
@@ -302,44 +403,47 @@ a { color: var(--primary-dark); text-decoration: none; }
   padding: 9px 16px;
   border-radius: var(--radius-sm);
   font-size: 13px; font-weight: 600;
-  background: #fff;
+  background: var(--surface-raised);
   color: var(--ink-2);
   border: 1px solid var(--line);
   transition: transform .16s, box-shadow .2s, background .2s, color .2s, border-color .2s;
   white-space: nowrap;
 }
-.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); color: var(--primary-dark); border-color: #CDE9E2; }
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); color: var(--primary-dark); border-color: var(--line-accent); }
 .btn:active { transform: translateY(0) scale(.985); }
 .btn-primary {
-  background: linear-gradient(120deg, var(--primary) 0%, #55CFB2 100%);
-  color: #fff; border-color: transparent;
-  box-shadow: 0 6px 16px rgba(63, 191, 160, .28);
+  background: var(--grad-btn-primary);
+  color: var(--accent-on); border-color: transparent;
+  box-shadow: var(--shadow-brand);
 }
-.btn-primary:hover { color: #fff; box-shadow: 0 10px 22px rgba(63, 191, 160, .34); }
+.btn-primary:hover { color: var(--accent-on); box-shadow: var(--shadow-brand-strong); }
 .btn-secondary {
-  background: linear-gradient(120deg, var(--secondary) 0%, #FFB295 100%);
-  color: #fff; border-color: transparent;
-  box-shadow: 0 6px 16px rgba(255, 158, 122, .3);
+  background: var(--grad-btn-secondary);
+  color: var(--accent-on); border-color: transparent;
+  box-shadow: var(--shadow-coral);
 }
-.btn-secondary:hover { color: #fff; box-shadow: 0 10px 22px rgba(255, 158, 122, .36); }
+.btn-secondary:hover { color: var(--accent-on); box-shadow: var(--shadow-coral-strong); }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn-ghost:hover { background: var(--primary-soft-2); }
 .btn-sm { padding: 6px 11px; font-size: 12px; border-radius: var(--radius-xs); }
+/* 顶栏主题切换：纯图标的方形按钮，跟旁边的实心主按钮拉开层级 */
+.btn-theme { padding: 6px 9px; min-width: 34px; }
+.btn-theme:hover { color: var(--primary-dark); border-color: var(--line-accent); background: var(--surface-hover); }
 .btn-block { width: 100%; }
-.btn-danger:hover { color: #D9534F; border-color: #F6D6D4; background: #FFF6F5; }
-.btn[disabled] { opacity: .5; pointer-events: none; }
+.btn-danger:hover { color: var(--danger); border-color: var(--line-danger); background: var(--surface-danger); }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: var(--disabled-opacity); pointer-events: none; }
 
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip {
   padding: 6px 13px; border-radius: 999px;
-  background: #fff; border: 1px solid var(--line);
+  background: var(--surface-raised); border: 1px solid var(--line);
   font-size: 12.5px; color: var(--ink-2);
   transition: all .2s;
 }
 .chip:hover { border-color: var(--primary); color: var(--primary-dark); }
 .chip.active {
-  background: var(--primary); color: #fff; border-color: transparent;
-  box-shadow: 0 4px 12px rgba(63, 191, 160, .26);
+  background: var(--accent-fill); color: var(--accent-on); border-color: transparent;
+  box-shadow: var(--shadow-brand);
 }
 
 /* ------------------------------------------------------------- 表单 */
@@ -355,19 +459,19 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
-  background: #FCFEFD;
+  background: var(--field-bg);
   transition: border-color .2s, box-shadow .2s, background .2s;
   outline: none;
 }
 .input:focus, .select:focus, .textarea:focus {
   border-color: var(--primary);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(63, 191, 160, .14);
+  background: var(--field-bg-focus);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .textarea { resize: vertical; min-height: 68px; line-height: 1.6; }
 .select {
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238AA3AB' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: var(--select-arrow);
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 32px;
@@ -377,9 +481,9 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 
 /* 时间输入：开始=主色 / 结束=副色 */
 .time-field input { font-variant-numeric: tabular-nums; font-weight: 600; }
-.time-field.start input { color: var(--primary-dark); border-color: #CBE9E1; background: var(--primary-soft-2); }
-.time-field.start input:focus { box-shadow: 0 0 0 3px rgba(63, 191, 160, .16); }
-.time-field.end input { color: var(--secondary-ink); border-color: #FBDACC; background: #FFF9F6; }
+.time-field.start input { color: var(--primary-dark); border-color: var(--line-accent); background: var(--primary-soft-2); }
+.time-field.start input:focus { box-shadow: 0 0 0 3px var(--ring); }
+.time-field.end input { color: var(--secondary-ink); border-color: var(--line-coral); background: var(--field-bg-warm); }
 .time-field.end input:focus { border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(255, 158, 122, .18); }
 
 /* 星期选择 */
@@ -388,14 +492,14 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   width: 38px; height: 34px;
   border-radius: var(--radius-xs);
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface-raised);
   font-size: 12.5px; color: var(--ink-2);
   transition: all .18s;
 }
 .week-picker button:hover { border-color: var(--primary); }
 .week-picker button.on {
-  background: var(--primary); border-color: transparent; color: #fff; font-weight: 600;
-  box-shadow: 0 4px 10px rgba(63, 191, 160, .26);
+  background: var(--accent-fill); border-color: transparent; color: var(--accent-on); font-weight: 600;
+  box-shadow: var(--shadow-brand);
 }
 
 /* 分段控件 */
@@ -414,7 +518,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   color: var(--muted);
   transition: all .2s;
 }
-.segmented button.active { background: #fff; color: var(--primary-dark); box-shadow: var(--shadow-sm); }
+.segmented button.active { background: var(--surface-raised); color: var(--primary-dark); box-shadow: var(--shadow-sm); }
 
 /* 掌握程度选择 */
 .mastery-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
@@ -422,7 +526,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   padding: 11px 4px 9px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface-raised);
   text-align: center;
   transition: all .2s;
 }
@@ -431,8 +535,8 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .mastery-grid button:hover { transform: translateY(-2px); border-color: var(--primary); }
 .mastery-grid button.on {
   border-color: transparent;
-  background: linear-gradient(140deg, var(--primary-soft), #E9F5FF);
-  box-shadow: 0 6px 16px rgba(63, 191, 160, .2);
+  background: var(--grad-mastery-on);
+  box-shadow: var(--shadow-brand);
 }
 .mastery-grid button.on .m-text { color: var(--primary-dark); font-weight: 700; }
 
@@ -441,7 +545,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .plan-form-wrap { position: sticky; top: 22px; }
 
 .plan-item {
-  border: 1px solid #E6F0EC;
+  border: 1px solid var(--line-item);
   border-radius: var(--radius);
   padding: 14px 15px;
   background: var(--surface-2);
@@ -464,7 +568,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .plan-item:last-child { margin-bottom: 0; }
 .plan-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .plan-task { font-size: 15px; font-weight: 650; line-height: 1.45; letter-spacing: .1px; }
-.plan-item.done .plan-task { text-decoration: line-through; text-decoration-color: rgba(63,191,160,.6); color: var(--ink-2); }
+.plan-item.done .plan-task { text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
 .plan-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
 
 /* 首页「今日任务」：把原本左侧 4px 渐变条扩成容纳起止时间的色块，任务名居中放大 */
@@ -482,10 +586,10 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   width: 74px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   /* 冷色双色渐变（薄荷→雾蓝）替代原来的薄荷→蜜桃：蜜桃段和中段混出灰调，整条看着发脏 */
-  background: linear-gradient(180deg, #E2F5EF 0%, #E9F2FB 100%);
+  background: var(--grad-task-block);
   /* inset 描边等价于一条 3px 品牌色立边，接替原 4px 装饰条的视觉作用 */
   box-shadow: inset 3px 0 0 var(--primary);
-  border-right: 1px solid #DCEBE7;
+  border-right: 1px solid var(--line-item);
   border-radius: var(--radius) 0 0 var(--radius);
   color: var(--primary-dark);
   font-family: var(--mono); font-size: 12.5px; font-weight: 700; line-height: 1.32;
@@ -512,14 +616,14 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 /* 英雄卡：整页唯一的渐变担当，把视觉重心钉在左上。
    ——之前四张首屏卡全是同款白卡，既没有焦点也显廉价。 */
 .home-hero {
-  background-image: linear-gradient(135deg, #E9F8F3 0%, #E6F1FE 52%, #FFEFE6 100%);
-  border-color: #D6EBE5;
+  background-image: var(--grad-hero);
+  border-color: var(--line-hero);
   box-shadow: var(--shadow);
 }
-.home-hero .ring .ring-bg { stroke: rgba(255, 255, 255, .9); }
+.home-hero .ring .ring-bg { stroke: var(--ring-bg-on-hero); }
 .home-hero .ring-center span { color: var(--ink-2); }
 /* 只给次级按钮铺白底：主按钮必须保留自己的渐变，否则白底 + 白字会把文案吃掉 */
-.home-hero .chip-row .btn:not(.btn-primary) { background: #fff; }
+.home-hero .chip-row .btn:not(.btn-primary) { background: var(--surface-raised); }
 .home-hero .home-sub { color: var(--ink-2); }
 
 /* 左栏任务卡：页脚贴底，任务少时把卡片底部收住 */
@@ -553,33 +657,33 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   min-height: 128px;
   padding: 18px 20px;
   border-radius: var(--radius);
-  border: 1px solid #E7F3EF;
+  border: 1px solid var(--line-item);
   /* 深青而非亮青：亮青和主按钮撞色且像广告条，压深后是「安静的强调」 */
-  background: linear-gradient(135deg, #1B6E5B 0%, #237C67 46%, #2E9E83 100%);
+  background: var(--grad-tip);
   border-color: transparent;
-  box-shadow: 0 10px 24px rgba(27, 110, 91, .22);
+  box-shadow: var(--shadow-tip);
 }
 /* 装饰性引号：纯 CSS 装饰，不参与命中测试 */
 .tip-deco {
   position: absolute; right: 6px; bottom: -30px;
   font-size: 96px; line-height: 1; font-weight: 700;
-  color: rgba(255, 255, 255, .16);
+  color: var(--tip-deco);
   pointer-events: none; user-select: none;
 }
 .tip-panel .tip-mark {
   flex: 0 0 auto;
   width: 36px; height: 36px; border-radius: 12px;
   display: grid; place-items: center;
-  background: rgba(255, 255, 255, .2);
-  color: #fff;
+  background: var(--tip-mark-bg);
+  color: var(--tip-fg);
 }
 .tip-panel .tip-text {
   flex: 1 1 auto; min-width: 0;
   max-width: 34ch; margin: 0 auto;
   font-size: 15.5px; font-weight: 600; line-height: 1.9; letter-spacing: .3px;
-  color: #fff;
+  color: var(--tip-fg);
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+  text-shadow: var(--tip-fg-shadow);
 }
 
 /* 今日学科安排：右栏余下的高度由这块列表吃掉，条目少也不会塌 */
@@ -600,7 +704,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 }
 .mix-bar i {
   display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), #7FD9C4);
+  background: var(--grad-mix-bar);
   transition: width .5s cubic-bezier(.22, .68, .36, 1);
 }
 .mix-val {
@@ -615,7 +719,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   min-height: 54px; padding: 11px 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--surface-raised);
   color: var(--ink-2);
   font-size: 13px; font-weight: 600; line-height: 1.35;
   /* 必须显式声明：四个磁贴里两个是 <button>、两个是 <a>。
@@ -658,10 +762,10 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 }
 /* 学科标签收进主色调：原来用天蓝，和薄荷主色、珊瑚副色凑成三色，页面显得杂 */
 .tag-subject { background: var(--primary-soft); color: var(--primary-dark); }
-.tag-repeat { background: var(--violet-soft); color: #7C5EC0; }
+.tag-repeat { background: var(--violet-soft); color: var(--violet-ink); }
 .tag-done { background: var(--primary-soft); color: var(--primary-dark); }
 .tag-pending { background: var(--secondary-soft); color: var(--secondary-ink); }
-.tag-running { background: var(--amber-soft); color: #C68A1E; }
+.tag-running { background: var(--amber-soft); color: var(--amber-ink); }
 
 .time-chip {
   display: inline-flex; align-items: center; gap: 5px;
@@ -677,27 +781,27 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   margin-top: 10px;
   font-size: 12.5px;
   color: var(--ink-2);
-  background: #FAFDFC;
+  background: var(--surface-3);
   border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
   padding: 8px 11px;
   line-height: 1.6;
 }
-.plan-focus { border-style: solid; border-color: #DCF0EA; background: linear-gradient(100deg, var(--primary-soft-2), #F6FBFF); }
+.plan-focus { border-style: solid; border-color: var(--line-accent); background: var(--grad-focus); }
 .plan-focus .fl { font-weight: 700; color: var(--primary-dark); margin-right: 4px; }
 
 /* ========== 今日项目（结构化：章节小节 + 手动项 + 勾选）========== */
-.today-items { margin-top: 10px; border: 1px solid #DCF0EA; border-radius: var(--radius-sm); background: linear-gradient(100deg, var(--primary-soft-2), #F6FBFF); padding: 9px 11px; }
+.today-items { margin-top: 10px; border: 1px solid var(--line-accent); border-radius: var(--radius-sm); background: var(--grad-focus); padding: 9px 11px; }
 .today-items-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .today-items-head .fl { font-weight: 700; color: var(--primary-dark); font-size: 12.5px; }
 .today-items-meta { font-size: 11.5px; color: var(--muted); }
 .today-items-list { display: flex; flex-direction: column; gap: 5px; }
-.today-item { display: flex; align-items: flex-start; gap: 9px; padding: 6px 8px; background: rgba(255,255,255,.7); border-radius: var(--radius-xs); transition: background .2s; }
+.today-item { display: flex; align-items: flex-start; gap: 9px; padding: 6px 8px; background: var(--surface-item); border-radius: var(--radius-xs); transition: background .2s; }
 .today-item.done { background: var(--primary-soft); }
-.today-item.done .today-item-title { text-decoration: line-through; text-decoration-color: rgba(63,191,160,.6); color: var(--ink-2); }
+.today-item.done .today-item-title { text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
   border-radius: 8px;
 .item-check:hover { border-color: var(--primary); }
-.item-check.on { background: var(--primary); border-color: var(--primary); }
+.item-check.on { background: var(--accent-fill); border-color: var(--accent-fill); }
 .today-item-main { min-width: 0; flex: 1; }
 .today-item-title { font-size: 13px; color: var(--ink); font-weight: 600; word-break: break-word; }
 .today-item-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
@@ -712,19 +816,19 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .manual-add { display: flex; gap: 8px; }
 .manual-add .input { flex: 1; }
 .est-box { margin: 10px 0; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.7; }
-.est-box.ok { background: var(--primary-soft); color: var(--primary-dark); border: 1px solid #BFE7DC; }
-.est-box.over { background: var(--amber-soft); color: #B8862B; border: 1px solid #F3DFA2; }
+.est-box.ok { background: var(--primary-soft); color: var(--primary-dark); border: 1px solid var(--line-accent); }
+.est-box.over { background: var(--amber-soft); color: var(--amber-ink); border: 1px solid var(--line-amber); }
 .est-ok { font-weight: 700; }
 .est-warn { font-weight: 700; }
 
 /* ========== 导入计划页 ========== */
 .chap-card .bar-track { border-radius: 999px; background: var(--line-2); }
 .sec-list { display: flex; flex-direction: column; gap: 3px; }
-.sec-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-xs); background: #FAFDFC; font-size: 12.5px; }
+.sec-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-xs); background: var(--surface-3); font-size: 12.5px; }
 .sec-row.done { background: var(--primary-soft); }
-.sec-row.done .sec-title { text-decoration: line-through; text-decoration-color: rgba(63,191,160,.6); color: var(--ink-2); }
-.sec-check { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 8px; border: 1.5px solid var(--line); display: grid; place-items: center; color: #fff; background: #fff; }
-.sec-check.on { background: var(--primary); border-color: var(--primary); }
+.sec-row.done .sec-title { text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
+.sec-check { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 8px; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--accent-on); background: var(--surface-raised); }
+.sec-check.on { background: var(--accent-fill); border-color: var(--accent-fill); }
 .sec-title { flex: 1; min-width: 0; color: var(--ink); word-break: break-word; }
 .sec-min { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .sec-date { color: var(--muted); font-size: 11px; white-space: nowrap; }
@@ -734,13 +838,13 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 
 /* 打卡卡片 */
 .checkin-card { position: relative; }
-.checkin-card.active-timer { border-color: var(--primary); box-shadow: 0 10px 30px rgba(63, 191, 160, .2); }
+.checkin-card.active-timer { border-color: var(--primary); box-shadow: var(--shadow-brand); }
 .timer-box {
   display: flex; align-items: center; justify-content: space-between;
   gap: 14px; flex-wrap: wrap;
   margin-top: 12px; padding: 12px 14px;
   border-radius: var(--radius);
-  background: linear-gradient(105deg, var(--primary-soft), #EAF4FF);
+  background: var(--grad-timer);
 }
 .timer-value {
   font-family: var(--mono); font-size: 26px; font-weight: 700;
@@ -807,7 +911,7 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 }
 
 /* ------------------------------------------------------------ 表格 */
-.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--line); background: #fff; }
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface-raised); }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 780px; }
 table.tbl th {
   text-align: left; padding: 11px 13px;
@@ -826,7 +930,7 @@ table.tbl tbody tr {
   content-visibility: auto;
   contain-intrinsic-size: auto 56px;
 }
-table.tbl tbody tr:hover { background: #FAFEFD; }
+table.tbl tbody tr:hover { background: var(--surface-hover); }
 table.tbl tbody tr:last-child td { border-bottom: none; }
 .td-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .td-dim { color: var(--muted); }
@@ -845,7 +949,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 /* --------------------------------------------------------- 弹窗 / 提示 */
 .modal-mask {
   position: fixed; inset: 0; z-index: 60;
-  background: rgba(38, 62, 68, .3);
+  background: var(--overlay);
   backdrop-filter: blur(3px);
   display: grid; place-items: center;
   padding: 18px;
@@ -854,7 +958,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 }
 .modal {
   width: 100%; max-width: 460px;
-  background: #fff;
+  background: var(--surface-raised);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 22px;
@@ -874,15 +978,15 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .toast {
   padding: 10px 18px;
   border-radius: 999px;
-  background: rgba(43, 66, 73, .92);
-  color: #fff;
+  background: var(--toast-bg);
+  color: var(--toast-fg);
   font-size: 13px; font-weight: 500;
   box-shadow: var(--shadow);
   animation: toastIn .26s cubic-bezier(.22,.68,.36,1) both;
   display: flex; align-items: center; gap: 8px;
 }
-.toast.ok { background: linear-gradient(120deg, var(--primary-dark), var(--primary)); }
-.toast.warn { background: linear-gradient(120deg, var(--secondary-ink), var(--secondary)); }
+.toast.ok { background: var(--grad-toast-ok); }
+.toast.warn { background: var(--grad-toast-warn); }
 /* 带操作按钮的 toast（删除撤销）：文本与按钮同排，按钮反白以突出可点。
    关键：#toast-root 整体是 pointer-events:none（避免普通提示挡住页面），
    父级禁用会连带子元素无法接收指针事件，因此这里必须显式恢复 auto，
@@ -894,16 +998,16 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   padding: 4px 12px;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, .92);
-  color: var(--secondary-ink);
+  background: var(--toast-action-bg);
+  color: var(--toast-action-fg);
   font-size: 12.5px; font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   transition: transform .15s, background .15s;
 }
-.toast .toast-action:hover { background: #fff; transform: scale(1.04); }
+.toast .toast-action:hover { background: var(--surface-raised); transform: scale(1.04); }
 .toast .toast-action:active { transform: scale(.97); }
-.toast .toast-action:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.toast .toast-action:focus-visible { outline: 2px solid var(--toast-fg); outline-offset: 2px; }
 
 /* 表格操作列：编辑 + 删除并排 */
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
@@ -912,7 +1016,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .tabbar {
   display: none;
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-  background: rgba(255, 255, 255, .96);
+  background: var(--surface-tabbar);
   /* 移动端底栏同样压在动态粒子背景上；去 blur 并提不透明度，避免每帧重模糊整条底栏。 */
   border-top: 1px solid var(--line);
   padding: 7px 4px calc(7px + env(safe-area-inset-bottom));
@@ -971,7 +1075,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   table.tbl thead { display: none; }
   table.tbl tbody tr {
     display: block;
-    background: #fff;
+    background: var(--surface-raised);
     border: 1px solid var(--line);
     border-radius: var(--radius);
     padding: 12px 14px;
@@ -1015,7 +1119,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 11px; border-radius: 999px;
   border: 1px solid var(--line);
-  background: #fff; color: var(--ink-2);
+  background: var(--surface-raised); color: var(--ink-2);
   font-size: 12.5px; font-weight: 600; cursor: pointer;
   transition: background .2s, border-color .2s, transform .12s, box-shadow .2s;
   white-space: nowrap;
@@ -1051,7 +1155,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .switch::after {
   content: ""; position: absolute; left: 2px; top: calc(50% - 7.5px);
   width: 15px; height: 15px; border-radius: 50%;
-  background: #fff; box-shadow: var(--shadow-sm); transition: left .2s;
+  background: var(--switch-knob); box-shadow: var(--shadow-sm); transition: left .2s;
 }
 .switch.on { color: var(--primary-dark); }
 .switch.on::before { background: var(--primary); }
@@ -1094,9 +1198,9 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 }
 .tree-leaf:hover { background: var(--primary-soft-2); }
 .tree-leaf.done { color: var(--ink-2); }
-.tree-leaf.done .leaf-title { text-decoration: line-through; text-decoration-color: rgba(63,191,160,.5); }
-.leaf-check { width: 18px; height: 18px; border-radius: 8px; border: 1.5px solid var(--line); display: grid; place-items: center; color: #fff; flex: 0 0 auto; }
-.leaf-check.on { background: var(--primary); border-color: var(--primary); }
+.tree-leaf.done .leaf-title { text-decoration: line-through; text-decoration-color: var(--strike); }
+.leaf-check { width: 18px; height: 18px; border-radius: 8px; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--accent-on); flex: 0 0 auto; }
+.leaf-check.on { background: var(--accent-fill); border-color: var(--accent-fill); }
 .leaf-title { flex: 1; min-width: 0; }
 .leaf-min { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .leaf-date { font-size: 11px; color: var(--muted); margin-left: 6px; white-space: nowrap; }
@@ -1130,14 +1234,14 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .eta-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; line-height: 1.25; }
 .eta-badge .eta-date { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .eta-badge .eta-sub { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
-.eta-ok .eta-date { color: var(--ok, #16a34a); }
+.eta-ok .eta-date { color: var(--ok); }
 .eta-done .eta-date { color: var(--ink); }
 .eta-muted .eta-date { color: var(--muted); }
-.eta-warn .eta-date { color: var(--warn, #d97706); }
+.eta-warn .eta-date { color: var(--warn); }
 .tree-card-head .eta-assoc { margin-left: 2px; flex: 0 0 auto; }
 
 .eta-list { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 0; }
-.eta-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2, var(--card)); }
+.eta-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
 .eta-row .eta-subj { flex: 0 0 84px; font-weight: 700; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eta-row .eta-badge { flex: 1; align-items: flex-start; text-align: left; }
 .eta-row .eta-badge .eta-sub { text-align: left; }
@@ -1146,7 +1250,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 /* 关联计划弹窗内的计划列表 */
 .eta-plan-list { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; margin: 4px 0 2px; }
 .eta-plan-row { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
-.eta-plan-row:hover { border-color: var(--brand, #6d8bff); }
+.eta-plan-row:hover { border-color: var(--brand); }
 .eta-plan-row > input[type=checkbox] { flex: 0 0 auto; width: 16px; height: 16px; }
 .eta-plan-row .eta-plan-sub { flex: 0 0 64px; font-weight: 600; font-size: 12px; color: var(--ink); }
 .eta-plan-row .eta-plan-task { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1168,11 +1272,254 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .eta-secs.collapsed { display: none; }
 .eta-row.sub { padding: 6px 8px; background: transparent; border-color: var(--line-2); }
 .eta-row.head { border-bottom: 0; border-radius: 0; }
-.eta-row.head .eta-subj { color: var(--brand, #6d8bff); }
+.eta-row.head .eta-subj { color: var(--brand); }
 .eta-row.head .eta-badge .eta-date { color: var(--ink); }
 
+/* ==========================================================================
+   暗色主题（黑夜模式）
+   -------------------------------------------------------------------------
+   怎么接入的：
+   · 自动跟随系统：JS 监听 matchMedia('(prefers-color-scheme: dark)')，
+     把结果写成根元素的 data-theme="dark|light"，所以下面只需要一个选择器。
+     （没有 JS 时最末尾还有一段 @media 兜底，至少先铺上深底避免白闪。）
+   · 手动切换：A.setTheme('dark' | 'light' | 'system')，
+     或者直接给根元素加属性/类名——两种写法都认：
+        document.documentElement.dataset.theme = 'dark';   // 或
+        document.documentElement.classList.add('theme-dark');
+     状态存在 localStorage['chenlu.study.theme']，与业务数据分开，不影响同步。
+
+   怎么扩展 / 覆盖颜色：
+   1. 新颜色一律先加令牌：在 :root 定义亮色值，再在本块的 [data-theme="dark"]
+      里定义同名暗色值，页面规则里只写 var(--x)，不要再写裸色值。
+   2. 只想改某几处：在本块末尾追加选择器重定义那几个令牌即可（var() 就近继承，
+      在哪个元素上重定义，就以哪个元素为根的子树生效）。
+   3. 渐变整条存在 --grad-* 令牌里，换主题时改令牌值即可，
+      test.mjs 有断言守着「渐变不许被改成纯色」。
+   4. Chart.js 与粒子画布在 JS 里通过 getComputedStyle 读 --chart-* / --pal-* /
+      --particle-*，所以换主题后需要重绘一次（已由 themechange 事件驱动）。
+   ========================================================================== */
+
+:root { color-scheme: light; }
+html[data-theme="light"] { color-scheme: light; }
+
+html[data-theme="dark"],
+html.theme-dark {
+  color-scheme: dark;
+
+  /* ① 表面层级：不用纯黑（OLED 上刺眼、层次也没法再往下分），
+     取带极淡品牌色调的中性深灰，从 bg 到 raised 共 5 级 */
+  --bg: #0C1110;
+  --card: #161E1C;
+  --card-bg: #161E1C;
+  --surface-2: #1D2623;
+  --surface-3: #242E2A;
+  --surface-hover: #2B3631;
+  --surface-raised: #1D2623;
+  --surface-item: rgba(255, 255, 255, .045);
+  --surface-sidebar: rgba(18, 25, 23, .92);
+  --surface-tabbar: rgba(18, 25, 23, .96);
+
+  /* ② 文字层级：也不用纯白，最高到 #E8EFEC；三档对 --card 分别是
+     14.6 / 9.6 / 6.4 : 1，最小档也高于 WCAG AA 的 4.5:1 */
+  --ink: #E8EFEC;
+  --ink-2: #B9C6C1;
+  --muted: #93A29C;
+
+  /* ③ 线 / 边框 / 表单控件 */
+  --line: #2A342F;
+  --line-2: #232D29;
+  --line-accent: #2F5A50;
+  --line-item: #232D29;
+  --line-hero: #2A342F;
+  --line-coral: #5A342A;
+  --line-amber: #4E3D1C;
+  --line-danger: #5A2E2A;
+  --surface-danger: #2A1A18;
+  --strike: rgba(111, 220, 192, .55);
+  --field-bg: #202A27;
+  --field-bg-focus: #26322D;
+  --field-bg-warm: #2E2119;
+  --ring: rgba(111, 220, 192, .22);
+
+  /* ④ 强调「底色 + 其上文字」成对给出：
+     深底上不能再用亮薄荷当底（白字只有 2.9:1），所以底色压深到 #1E6E5B
+     （白字 6.1:1），而「强调文字」反过来要提亮成 #6FDCC0（对卡片 10.1:1）。 */
+  --accent-fill: #1E6E5B;
+  --accent-on: #FFFFFF;
+  --primary: #2FA98D;
+  --primary-dark: #6FDCC0;
+  --primary-soft: #193330;
+  --primary-soft-2: #14241F;
+  --secondary: #FF8A60;
+  --secondary-ink: #FFA98A;
+  --secondary-soft: #3A2219;
+  --accent: #6098E8;
+  --accent-ink: #8FB6F2;
+  --accent-soft: #182434;
+  --violet: #967AD6;
+  --violet-ink: #B69BE8;
+  --violet-soft: #241C33;
+  --amber: #E2A84A;
+  --amber-ink: #F0C274;
+  --amber-soft: #342715;
+  --ok: #5FD3B4;
+  --warn: #F0C274;
+  --danger: #E8877A;
+  --brand: #8FB6F2;
+
+  /* 徽章：仍是橙色（未完成语义），只是压深到白字 4.8:1 */
+  --badge-bg: #C2561F;
+  --badge-fg: #FFFFFF;
+
+  /* ⑤ 遮罩 / 提示 / 滚动条 */
+  --overlay: rgba(0, 0, 0, .58);
+  --toast-bg: rgba(34, 48, 44, .95);
+  --toast-fg: #E8EFEC;
+  --toast-action-bg: rgba(255, 255, 255, .14);
+  --toast-action-fg: #6FDCC0;
+  --switch-knob: #E8EFEC;
+  --scrollbar-thumb: #38443F;
+  --scrollbar-thumb-hover: #4A5852;
+  --ring-bg-on-hero: rgba(255, 255, 255, .08);
+  --tip-fg: #EAF7F2;
+  --tip-fg-shadow: none;
+  --tip-deco: rgba(255, 255, 255, .10);
+  --tip-mark-bg: rgba(255, 255, 255, .12);
+  --focus-outline: #6FDCC0;
+  --disabled-opacity: .45;
+
+  /* 阴影：深底上黑影看不见，改成更黑更散（深底上靠「面更亮」而非「影更深」分层） */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 20px rgba(0, 0, 0, .3);
+  --shadow: 0 2px 6px rgba(0, 0, 0, .45), 0 16px 34px rgba(0, 0, 0, .38);
+  --shadow-lg: 0 6px 14px rgba(0, 0, 0, .5), 0 30px 62px rgba(0, 0, 0, .5);
+  --shadow-brand: 0 6px 16px rgba(0, 0, 0, .42);
+  --shadow-brand-strong: 0 10px 22px rgba(0, 0, 0, .52);
+  --shadow-coral: 0 6px 16px rgba(0, 0, 0, .42);
+  --shadow-coral-strong: 0 10px 22px rgba(0, 0, 0, .52);
+  --shadow-tip: 0 10px 24px rgba(0, 0, 0, .36);
+
+  /* 渐变：色标整体压暗，但结构（几段、方向、比例）与亮色完全一致 */
+  --grad-page: linear-gradient(165deg, #0C1110 0%, #0E141A 45%, #141014 100%);
+  --grad-brand: linear-gradient(135deg, #2FA98D 0%, #6FDCC0 55%, #FF8A60 130%);
+  --grad-nav-active: linear-gradient(100deg, #193330 0%, #182434 100%);
+  --grad-btn-primary: linear-gradient(120deg, #17654F 0%, #1E7A63 100%);
+  --grad-btn-secondary: linear-gradient(120deg, #B8472F 0%, #C2503F 100%);
+  --grad-hero: linear-gradient(135deg, #12211C 0%, #131C28 52%, #241A15 100%);
+  --grad-tip: linear-gradient(135deg, #16332C 0%, #1A3A32 46%, #1E443A 100%);
+  --grad-task-block: linear-gradient(180deg, #1B2622 0%, #1A2028 100%);
+  --grad-timer: linear-gradient(105deg, #193330 0%, #182434 100%);
+  --grad-mix-bar: linear-gradient(90deg, #2FA98D 0%, #6FDCC0 100%);
+  --grad-focus: linear-gradient(100deg, #14241F 0%, #182434 100%);
+  --grad-mastery-on: linear-gradient(140deg, #193330 0%, #182434 100%);
+  --grad-toast-ok: linear-gradient(120deg, #17654F 0%, #1E7A63 100%);
+  --grad-toast-warn: linear-gradient(120deg, #B8472F 0%, #C2503F 100%);
+  /* KPI 卡底纹由 JS 按色系内联 --tint（亮色值），暗色下改成一层极淡的白雾，
+     这样四张卡的区分度靠图标色，不会在深底上糊成一片。 */
+  --grad-kpi: linear-gradient(150deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 62%);
+
+  --select-arrow: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2393A29C' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+
+  /* 图表与画布：网格线压暗、文字提亮、柱色整体提亮一档，避免深底上发灰发死 */
+  --chart-text: #93A29C;
+  --chart-grid: #242E2A;
+  --chart-pie-border: #161E1C;
+  --chart-line: #3FBFA0;
+  --chart-line-2: #FF8A60;
+  --chart-fill: rgba(63, 191, 160, .18);
+  --chart-fill-2: rgba(255, 138, 96, .14);
+  --chart-1: #6B7B7E; --chart-2: #8FC97E; --chart-3: #7FB3F5; --chart-4: #3FBFA0; --chart-5: #FF9E7A;
+  --pal-1: #4FCBAE; --pal-2: #FF9E7A; --pal-3: #7FB3F5; --pal-4: #B39BE8; --pal-5: #F7C56B;
+  --pal-6: #77CFE0; --pal-7: #F49AC1; --pal-8: #9FD37E; --pal-9: #E9A15C; --pal-10: #9DB2B9;
+  /* 粒子：亮度整体下调（0.10 → 0.06 量级），否则深底上像一堆亮点在爬 */
+  --particle-1: #2E7F6C; --particle-2: #4E7CA8; --particle-3: #A0553B; --particle-4: #7A63A0;
+  --particle-line-rgb: 111, 220, 192;
+  --particle-blob-1: rgba(47, 169, 141, .07);
+  --particle-blob-2: rgba(127, 179, 245, .07);
+  --particle-blob-3: rgba(255, 158, 122, .06);
+}
+
+/* KPI 卡：暗色下不消费 JS 内联的 --tint（那是亮色值），改用一层淡白雾底纹 */
+html[data-theme="dark"] .kpi,
+html.theme-dark .kpi { background-image: var(--grad-kpi); }
+
+/* 进度环的 SVG 渐变：stop-color 是可以用 CSS 覆盖的属性，暗色下换成同系深色 */
+html[data-theme="dark"] #ringGrad stop:nth-child(1),
+html.theme-dark #ringGrad stop:nth-child(1) { stop-color: #2FA98D; }
+html[data-theme="dark"] #ringGrad stop:nth-child(2),
+html.theme-dark #ringGrad stop:nth-child(2) { stop-color: #6FDCC0; }
+html[data-theme="dark"] #ringGrad stop:nth-child(3),
+html.theme-dark #ringGrad stop:nth-child(3) { stop-color: #FF8A60; }
+
+/* 图片 / 插画在暗色下压一档亮度，避免整块白底抢眼；
+   需要保持原样的图加 data-no-dim 即可跳过。 */
+html[data-theme="dark"] img:not([data-no-dim]),
+html.theme-dark img:not([data-no-dim]) { filter: brightness(.88) contrast(1.04); }
+
+/* -------------------------------------------------- 交互态（两个主题共用） */
+/* 键盘聚焦：统一一圈品牌色描边，暗色下 --focus-outline 自动变亮 */
+a:focus-visible,
+button:focus-visible,
+.chip:focus-visible,
+.quick-item:focus-visible,
+.nav-item:focus-visible,
+.tabbar .tab-item:focus-visible,
+.sync-pill:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+.input:focus-visible, .select:focus-visible, .textarea:focus-visible { outline: none; }
+
+/* 禁用态：不只是降透明度，底色也压一档，避免深底上「看着还能点」 */
+.input:disabled, .select:disabled, .textarea:disabled {
+  opacity: .6;
+  background: var(--surface-hover);
+  cursor: not-allowed;
+}
+.btn[disabled] { opacity: var(--disabled-opacity); pointer-events: none; }
+
+/* 滚动条：WebKit 用令牌，Firefox 用 scrollbar-color（会跟随 color-scheme） */
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+html { scrollbar-color: var(--scrollbar-thumb) transparent; }
+
+/* -------------------------------------------------- 主题切换的平滑过渡
+   只在切换那 300ms 内给全局加过渡，平时不挂 —— 常驻 *{transition} 会让
+   每次 hover/滚动都多一次样式重算。prefers-reduced-motion 下直接不生效。 */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-switching,
+  html.theme-switching *,
+  html.theme-switching *::before,
+  html.theme-switching *::after {
+    transition: background-color .28s ease, background-image .28s ease,
+      border-color .28s ease, color .28s ease, box-shadow .28s ease,
+      fill .28s ease, stroke .28s ease, stop-color .28s ease !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* 极端兜底：JS 还没跑起来时先按系统偏好铺一层底色，避免白屏闪一下 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]):not(.theme-dark):not(.theme-light) {
+    color-scheme: dark;
+    background: #0C1110;
+    color: #E8EFEC;
+  }
+}
 
 </style>
+<script>
+/* 主题预置：只在首屏做一件事 —— 读偏好 → 给根元素打 data-theme，
+   必须在样式渲染前跑完，否则深色用户会先闪一下浅色。
+   不依赖后面的应用脚本；写 localStorage 失败时优雅退化为跟随系统。 */
+(function () {
+  try {
+    var pref = localStorage.getItem('chenlu.study.theme') || 'system';
+    var dark = pref === 'dark' || (pref === 'system' &&
+      window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  } catch (e) { }
+})();
+</script>
 </head>
 <body>
 <canvas id="particles" aria-hidden="true"></canvas>
@@ -1230,6 +1577,16 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
     </g>
     <g id="ic-sync" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 8"/><path d="M20 4.5V8h-3.5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 16"/><path d="M4 19.5V16h3.5"/>
+    </g>
+    <!-- 主题切换三态图标：跟随系统 / 亮色 / 暗色 -->
+    <g id="ic-theme-auto" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none"/>
+    </g>
+    <g id="ic-sun" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>
+    </g>
+    <g id="ic-moon" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>
     </g>
   </defs>
 </svg>
@@ -1503,7 +1860,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return MASTERY[v - 1];
   }
   function colorFor(name, index) {
-    if (typeof index === 'number' && index >= 0) return PALETTE[index % PALETTE.length];
+    /* 优先取主题里的 --pal-*（暗色下是提亮过的一档），取不到再回退到内置色板 */
+    if (typeof index === 'number' && index >= 0) {
+      return cssVar('--pal-' + (index % PALETTE.length + 1), PALETTE[index % PALETTE.length]);
+    }
     var h = 0, str = String(name || '');
     for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 100003;
     return PALETTE[h % PALETTE.length];
@@ -2554,14 +2914,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           vx: (Math.random() - 0.5) * 0.22,
           vy: (Math.random() - 0.5) * 0.22,
           r: 1.1 + Math.random() * 2.2,
-          c: ['#3FBFA0', '#7FB3F5', '#FF9E7A', '#B39BE8'][i % 4],
+          c: [cssVar('--particle-1', '#3FBFA0'), cssVar('--particle-2', '#7FB3F5'),
+              cssVar('--particle-3', '#FF9E7A'), cssVar('--particle-4', '#B39BE8')][i % 4],
           a: 0.18 + Math.random() * 0.3
         });
       }
       blobs = [
-        { x: W * 0.16, y: H * 0.18, r: Math.max(W, H) * 0.22, c: 'rgba(63,191,160,0.10)' },
-        { x: W * 0.86, y: H * 0.24, r: Math.max(W, H) * 0.2, c: 'rgba(127,179,245,0.10)' },
-        { x: W * 0.7, y: H * 0.85, r: Math.max(W, H) * 0.22, c: 'rgba(255,158,122,0.09)' }
+        { x: W * 0.16, y: H * 0.18, r: Math.max(W, H) * 0.22, c: cssVar('--particle-blob-1', 'rgba(63,191,160,0.10)') },
+        { x: W * 0.86, y: H * 0.24, r: Math.max(W, H) * 0.2, c: cssVar('--particle-blob-2', 'rgba(127,179,245,0.10)') },
+        { x: W * 0.7, y: H * 0.85, r: Math.max(W, H) * 0.22, c: cssVar('--particle-blob-3', 'rgba(255,158,122,0.09)') }
       ];
       renderBlobs();
     }
@@ -2574,7 +2935,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         for (var j = i + 1; j < dots.length; j++) {
           var q = dots[j], dx = p.x - q.x, dy = p.y - q.y, d2 = dx * dx + dy * dy;
           if (d2 < 15000) {
-            ctx.strokeStyle = 'rgba(63,191,160,' + (0.1 * (1 - d2 / 15000)).toFixed(3) + ')';
+            ctx.strokeStyle = 'rgba(' + (cssVar('--particle-line-rgb', '63,191,160')) +
+              ',' + (0.1 * (1 - d2 / 15000)).toFixed(3) + ')';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
@@ -2608,6 +2970,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     resize();
     if (reduce) { paint(); } else { step(); }
+
+    // 主题切换后粒子配色要重取（颜色来自 CSS 变量）
+    window.addEventListener('themechange', function () {
+      resize();
+      if (reduce) paint();
+    });
 
     var rt = null;
     window.addEventListener('resize', function () {
@@ -2714,6 +3082,88 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   });
 
+  /* ------------------------------------------------------------ 主题
+     亮 / 暗两套主题，偏好存 localStorage['chenlu.study.theme']（与业务数据分开，
+     不进同步链路），取值 'system' | 'light' | 'dark'。
+     首屏由 template.html 里的内联脚本先落一次 data-theme 防白闪，
+     这里负责：切换、跟随系统变化、并通知 canvas 类组件重取颜色。 */
+  var THEME_KEY = 'chenlu.study.theme';
+
+  function cssVar(name, fallback) {
+    var v = '';
+    try {
+      v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    } catch (e) { v = ''; }
+    v = (v || '').trim();
+    return v || fallback || '';
+  }
+  function themePref() {
+    try { return localStorage.getItem(THEME_KEY) || 'system'; } catch (e) { return 'system'; }
+  }
+  function systemDark() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function reduceMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  function effectiveTheme(pref) {
+    var p = pref || themePref();
+    if (p === 'dark' || p === 'light') return p;
+    return systemDark() ? 'dark' : 'light';
+  }
+  function applyTheme(pref, animate) {
+    var theme = effectiveTheme(pref);
+    var root = document.documentElement;
+    root.setAttribute('data-theme', theme);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0C1110' : '#2FA98D');
+    if (animate && !reduceMotion()) {
+      root.classList.add('theme-switching');
+      if (applyTheme._t) clearTimeout(applyTheme._t);
+      applyTheme._t = setTimeout(function () { root.classList.remove('theme-switching'); }, 320);
+    }
+    return theme;
+  }
+  function setTheme(pref) {
+    try { localStorage.setItem(THEME_KEY, pref); } catch (e) { }
+    var theme = applyTheme(pref, true);
+    // 图表与粒子画在 canvas 上，颜色是 JS 从 CSS 变量读的，必须重绘才跟着变
+    try {
+      window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme, pref: pref } }));
+    } catch (e) { }
+    return theme;
+  }
+  /* 点击循环：跟随系统 → 亮 → 暗 → 跟随系统 */
+  function nextThemePref() {
+    var p = themePref();
+    if (p === 'system') return 'light';
+    if (p === 'light') return 'dark';
+    return 'system';
+  }
+
+  /* 跟随系统时，系统自己切到深/浅也要实时跟上（不只是首屏那一次） */
+  if (window.matchMedia) {
+    try {
+      var mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+      var onSys = function () {
+        if (themePref() !== 'system') return;   // 手动锁定的不动
+        applyTheme('system', true);
+        try {
+          window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: effectiveTheme(), pref: 'system' } }));
+        } catch (e2) { }
+      };
+      if (mqDark.addEventListener) mqDark.addEventListener('change', onSys);
+      else if (mqDark.addListener) mqDark.addListener(onSys);
+    } catch (e3) { }
+  }
+
+  ACTIONS['theme-toggle'] = function () {
+    var next = nextThemePref();
+    setTheme(next);
+    toast('主题：' + (next === 'system' ? '跟随系统' : (next === 'dark' ? '暗色' : '亮色')), 'ok');
+    App.renderPageActions();
+  };
+
   /* -------------------------------------------------------- 对外暴露 */
   var App = {
     // 常量
@@ -2755,12 +3205,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     setDayItems: setDayItems, toggleItemDone: toggleItemDone,
     // 计时
     timerElapsed: timerElapsed, startTimer: startTimer, pauseTimer: pauseTimer, clearTimer: clearTimer,
+    // 主题
+    THEME_KEY: THEME_KEY, cssVar: cssVar, themePref: themePref, effectiveTheme: effectiveTheme,
+    setTheme: setTheme, nextThemePref: nextThemePref,
     // UI
     ui: ui, ACTIONS: ACTIONS, toast: toast, openModal: openModal, closeModal: closeModal,
     confirmModal: confirmModal, renderNav: renderNav, navigate: navigate,
     // 由视图层实现
     renderView: function () { }, renderPageActions: function () { }, syncTimerUI: function () { },
     boot: function () {
+      applyTheme(themePref(), false);   // 首屏已由内联脚本预置，这里再同步一次 meta 主题色
       initParticles();
       // 跨天遗留计时：自动暂停并提示
       if (store.timer && store.timer.date !== today()) {
@@ -2821,6 +3275,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   var A = window.App;
   var esc = A.esc, $ = A.$, $$ = A.$$, ui = A.ui, S = A.store, ACT = A.ACTIONS;
+
+  /* 取主题令牌：图表画在 canvas 上，颜色只能由 JS 读 CSS 变量，不能直接写死 */
+  function cv(name, fallback) {
+    return A.cssVar ? A.cssVar(name, fallback) : fallback;
+  }
 
   /* ------------------------------------------------------- 片段工具 */
   function ic(id, size) {
@@ -3514,7 +3973,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var Chart = window.Chart;
     Chart.defaults.font.family = '"PingFang SC","Microsoft YaHei",system-ui,sans-serif';
     Chart.defaults.font.size = 12;
-    Chart.defaults.color = '#8AA3AB';
+    Chart.defaults.color = cv('--chart-text', '#8AA3AB');
     // 看板有 4 张图表，默认会按 window.devicePixelRatio 放大 backing 分辨率。
     // 在 2x/3x 屏上这会让画布像素数翻 4–9 倍，滚动与重绘成本陡增。
     // 封顶到 2 倍：肉眼几乎无差，但显存与栅格化开销大幅下降。
@@ -3529,7 +3988,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         datasets: [{
           data: subjSecs.map(function (v) { return Math.round(v / 60 * 10) / 10; }),
           backgroundColor: subjects.map(function (s, i) { return A.colorFor(s, i); }),
-          borderColor: '#fff', borderWidth: 2, hoverOffset: 8
+          borderColor: cv('--chart-pie-border', '#fff'), borderWidth: 2, hoverOffset: 8
         }]
       },
       options: {
@@ -3559,7 +4018,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         labels: A.MASTERY.map(function (m) { return m.emoji + ' ' + m.text; }),
         datasets: [{
           data: mCounts, borderRadius: 10, maxBarThickness: 46,
-          backgroundColor: ['#C9D6DA', '#9FD37E', '#7FB3F5', '#3FBFA0', '#FF9E7A']
+          backgroundColor: [cv('--chart-1', '#C9D6DA'), cv('--chart-2', '#9FD37E'),
+            cv('--chart-3', '#7FB3F5'), cv('--chart-4', '#3FBFA0'), cv('--chart-5', '#FF9E7A')]
         }]
       },
       options: {
@@ -3570,7 +4030,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         },
         scales: {
           x: { grid: { display: false } },
-          y: { beginAtZero: true, grid: { color: '#EFF5F4' }, ticks: { precision: 0 } }
+          y: { beginAtZero: true, grid: { color: cv('--chart-grid', '#EFF5F4') }, ticks: { precision: 0 } }
         }
       }
     });
@@ -3582,13 +4042,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         datasets: [
           {
             label: '学习时长（分钟）', data: dayMin, yAxisID: 'y',
-            borderColor: '#3FBFA0', backgroundColor: 'rgba(63,191,160,.16)',
+            borderColor: cv('--chart-line', '#3FBFA0'), backgroundColor: cv('--chart-fill', 'rgba(63,191,160,.16)'),
             fill: true, tension: .38, borderWidth: 2.6, pointRadius: days.length > 40 ? 0 : 3,
-            pointBackgroundColor: '#fff', pointBorderColor: '#3FBFA0', pointBorderWidth: 2
+            pointBackgroundColor: cv('--chart-pie-border', '#fff'),
+            pointBorderColor: cv('--chart-line', '#3FBFA0'), pointBorderWidth: 2
           },
           {
             label: '打卡次数', data: dayCnt, yAxisID: 'y1',
-            borderColor: '#FF9E7A', backgroundColor: 'rgba(255,158,122,.12)',
+            borderColor: cv('--chart-line-2', '#FF9E7A'), backgroundColor: cv('--chart-fill-2', 'rgba(255,158,122,.12)'),
             fill: false, tension: .38, borderWidth: 2, borderDash: [5, 4],
             pointRadius: days.length > 40 ? 0 : 2.5
           }
@@ -3609,7 +4070,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         },
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: narrow ? 5 : 10 } },
-          y: { beginAtZero: true, grid: { color: '#EFF5F4' }, title: { display: !narrow, text: '分钟' } },
+          y: { beginAtZero: true, grid: { color: cv('--chart-grid', '#EFF5F4') }, title: { display: !narrow, text: '分钟' } },
           y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { precision: 0 }, title: { display: !narrow, text: '次数' } }
         }
       }
@@ -3639,7 +4100,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           }
         },
         scales: {
-          x: { beginAtZero: true, max: 5, ticks: { stepSize: 1 }, grid: { color: '#EFF5F4' } },
+          x: { beginAtZero: true, max: 5, ticks: { stepSize: 1 }, grid: { color: cv('--chart-grid', '#EFF5F4') } },
           y: { grid: { display: false } }
         }
       }
@@ -5194,6 +5655,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var box = $('#page-actions');
     if (!box) return;
     var html = '';
+    /* 主题切换：图标反映当前状态（跟随系统 / 亮 / 暗），点击按
+       跟随系统 → 亮 → 暗 → 跟随系统 循环，状态由 app-core 的 theme-toggle 落盘 */
+    var pref = A.themePref ? A.themePref() : 'system';
+    var themeNow = A.effectiveTheme ? A.effectiveTheme() : 'light';
+    var tIcon = pref === 'system' ? 'ic-theme-auto' : (themeNow === 'dark' ? 'ic-moon' : 'ic-sun');
+    var tLabel = pref === 'system' ? '跟随系统' : (themeNow === 'dark' ? '暗色' : '亮色');
+    html += '<button class="btn btn-sm btn-theme" data-act="theme-toggle" type="button"' +
+      ' title="主题：' + tLabel + '（点击切换）" aria-label="主题：' + tLabel + '（点击切换）">' +
+      ic(tIcon, 15) + '</button>';
     var t = S.timer;
     if (t && ui.route !== 'checkin') {
       html += '<button class="btn btn-sm btn-primary" data-act="goto-timer">' +
@@ -5233,6 +5703,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }, 320);
     };
   })());
+
+  /* 主题切换后：图表颜色是 JS 读的，必须重绘当前视图才生效；
+     顶栏图标也要跟着换（renderPageActions 会重新渲染按钮） */
+  window.addEventListener('themechange', function () {
+    var root = $('#view-' + ui.route);
+    if (root && A.renderView) A.renderView(ui.route, root);
+    if (A.renderPageActions) A.renderPageActions();
+  });
 
   /* 启动 */
   A.boot();
