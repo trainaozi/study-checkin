@@ -618,6 +618,10 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   background: #fff;
   color: var(--ink-2);
   font-size: 13px; font-weight: 600; line-height: 1.35;
+  /* 必须显式声明：四个磁贴里两个是 <button>、两个是 <a>。
+     <button> 有 UA 默认的 text-align:center，而 <a> 继承的是左对齐，
+     不写这一行就会出现「一排在中间、一排贴着图标」的错位。 */
+  text-align: center;
   transition: transform .22s, box-shadow .22s, border-color .22s, color .22s;
 }
 .quick-item:hover {
