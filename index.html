@@ -799,7 +799,22 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .today-item { display: flex; align-items: flex-start; gap: 9px; padding: 6px 8px; background: var(--surface-item); border-radius: var(--radius-xs); transition: background .2s; }
 .today-item.done { background: var(--primary-soft); }
 .today-item.done .today-item-title { text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
+/* 勾选框。这条规则曾被一次批量替换吞掉选择器，只剩下一行孤儿声明，
+   于是 .item-check 失去了宽高/边框/背景 —— 元素仍在 DOM 里，但尺寸塌陷成 0×0，
+   看上去就是「勾选框消失了」。恢复时颜色改走主题令牌：
+   --surface-raised 亮色下就是 #fff（视觉与原来一致），暗色下自动换成深色。 */
+.item-check {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
   border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--surface-raised);
+  display: grid; place-items: center;
+  color: var(--accent-on);
+  cursor: pointer;
+  transition: all .18s;
+  margin-top: 1px;
+}
 .item-check:hover { border-color: var(--primary); }
 .item-check.on { background: var(--accent-fill); border-color: var(--accent-fill); }
 .today-item-main { min-width: 0; flex: 1; }
@@ -1441,6 +1456,11 @@ html.theme-dark {
 /* KPI 卡：暗色下不消费 JS 内联的 --tint（那是亮色值），改用一层淡白雾底纹 */
 html[data-theme="dark"] .kpi,
 html.theme-dark .kpi { background-image: var(--grad-kpi); }
+
+/* 未勾选的勾选框：边框用的是 --line，暗色下对卡片只有约 1.3:1，
+   等于把控件"藏"起来。控件边界按 WCAG 1.4.11 要求 3:1，这里单独提亮一档。 */
+html[data-theme="dark"] .item-check:not(.on),
+html.theme-dark .item-check:not(.on) { border-color: #6A7E76; }
 
 /* 进度环的 SVG 渐变：stop-color 是可以用 CSS 覆盖的属性，暗色下换成同系深色 */
 html[data-theme="dark"] #ringGrad stop:nth-child(1),
