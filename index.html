@@ -113,6 +113,15 @@
   --grad-tip: linear-gradient(135deg, #1B6E5B 0%, #237C67 46%, #2E9E83 100%);
   --grad-task-block: linear-gradient(180deg, #E2F5EF 0%, #E9F2FB 100%);
   --grad-timer: linear-gradient(105deg, var(--primary-soft), #EAF4FF);
+  --grad-running: linear-gradient(120deg, #0E3A31 0%, #164F42 55%, #1B6E5B 100%);
+  --grad-running-bar: linear-gradient(90deg, #6FDCC0 0%, #A8ECD9 100%);
+  /* 深底卡上的前景组：--run-fg 主文字 / -2 次要文字 / -veil* 半透明块底（标签、按钮、进度槽）
+     / --run-hi 高亮点（计时数字、圆点）。整组跟着主题换，规则里不许直接写白色。 */
+  --run-fg: #FFFFFF;
+  --run-fg-2: rgba(255, 255, 255, .82);
+  --run-veil: rgba(255, 255, 255, .18);
+  --run-veil-2: rgba(255, 255, 255, .24);
+  --run-hi: #9FE8D5;
   --grad-mix-bar: linear-gradient(90deg, var(--primary), #7FD9C4);
   --grad-focus: linear-gradient(100deg, var(--primary-soft-2), #F6FBFF);
   --grad-mastery-on: linear-gradient(140deg, var(--primary-soft), #E9F5FF);
@@ -643,6 +652,49 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 }
 .plan-item.rise.home-task .plan-meta { justify-content: center; margin-top: 9px; }
 
+/* ===== 首页「正在计时」卡 =====
+   只在 store.timer 存在时渲染，把专注中的任务钉在首屏最顶部，
+   暂停 / 继续 / 结束 / 丢弃都能在这里直接操作，不必跳到打卡页。
+   底色走 --grad-running（薄荷→天蓝→暖），与英雄卡的薄荷→珊瑚区分，两张渐变卡不撞脸。 */
+.home-running {
+  margin-bottom: 16px;
+  background-image: var(--grad-running);
+  border-color: transparent;
+  box-shadow: var(--shadow-brand);
+}
+/* 深底上的一切翻成浅色：这张卡是首屏唯一的深色块，沿用浅卡的文字/标签/按钮色会整片糊掉。
+   颜色一律走 --run-* 令牌，规则里不直接写白色（否则暗色主题下会留白块）。 */
+.home-running .card-title, .home-running .home-run-task { color: var(--run-fg); }
+.home-running .home-run-hint { color: var(--run-fg-2); }
+.home-running .tag, .home-running .tag-subject, .home-running .time-chip { background: var(--run-veil-2); color: var(--run-fg); }
+.home-running .time-arrow { color: var(--run-fg-2); }
+.home-running .card-title .dot { background: var(--run-hi); }
+/* 数字用最高对比的前景色：它是这张卡要被一眼看到的主角，
+   薄荷高亮留给圆点与进度条，层级靠「谁最亮」区分而不是靠色相。 */
+.home-running .timer-value { color: var(--run-fg); }
+.home-running .timer-hint { color: var(--run-fg-2); }
+.home-running .dot-live, .home-running .dot-live::after { background: var(--run-hi); }
+.home-running .bar-track { background: var(--run-veil); }
+.home-running .bar-fill { background: var(--grad-running-bar); }
+/* 次级按钮：深底上用半透明块，主操作（继续）反过来做成实心浅块，层级才拉得开 */
+.home-running .btn { background: var(--run-veil-2); color: var(--run-fg); border-color: var(--run-veil); }
+.home-running .btn:hover { background: var(--run-veil-2); color: var(--run-fg); border-color: var(--run-fg-2); box-shadow: none; }
+.home-running .btn-primary { background: var(--run-fg); color: var(--primary-dark); border-color: transparent; box-shadow: none; }
+.home-running .btn-primary:hover { color: var(--primary-dark); box-shadow: var(--shadow-sm); }
+.home-running .btn-danger { background: var(--run-veil-2); color: var(--run-fg); border-color: transparent; }
+.home-running .btn-danger:hover { background: var(--run-fg); color: var(--danger); border-color: transparent; }
+/* 暂停态收掉品牌光晕：还在计时才值得「发光」，暂停是安静的 */
+.home-running.is-paused { box-shadow: var(--shadow-sm); }
+.home-run-body { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.home-run-main { flex: 1 1 260px; min-width: 0; }
+.home-run-task { font-size: 17px; font-weight: 700; line-height: 1.45; color: var(--ink); word-break: break-word; }
+.home-run-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
+.home-run-bar { margin-top: 12px; height: 8px; }
+.home-run-hint { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.home-run-clock { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.home-running .timer-value { font-size: 30px; }
+.home-run-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
 /* ===== 首页整体：字体层级 / 英雄区 / 右栏自适应 ===== */
 .home-hi { font-size: 20px; font-weight: 700; letter-spacing: -.2px; line-height: 1.4; color: var(--ink); }
 .home-sub { margin-top: 8px; line-height: 1.85; }
@@ -1111,6 +1163,8 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   .grid-2 { grid-template-columns: 1fr; }
   .grid.grid-2 { grid-template-columns: 1fr !important; }
   .home-top-grid { grid-template-columns: 1fr !important; }
+  /* 首页计时卡：窄屏时钟块换行到下一行，改左对齐才与任务名同一条阅读基线 */
+  .home-run-clock { align-items: flex-start; }
   .ring-wrap { flex-direction: column; align-items: flex-start; }
   .ring-wrap .ring { align-self: flex-start; }
   .card { padding: 16px; border-radius: var(--radius); }
@@ -1154,6 +1208,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 
 @media (max-width: 420px) {
   .timer-value { font-size: 22px; }
+  .home-running .timer-value { font-size: 26px; }
   .btn { padding: 8px 13px; }
   /* 窄屏收窄时间色块，给任务名留出足够宽度，避免换行溢出 */
   .plan-item.rise.home-task { padding-left: 78px; }
@@ -1464,6 +1519,13 @@ html.theme-dark {
   --grad-tip: linear-gradient(135deg, #16332C 0%, #1A3A32 46%, #1E443A 100%);
   --grad-task-block: linear-gradient(180deg, #1B2622 0%, #1A2028 100%);
   --grad-timer: linear-gradient(105deg, #193330 0%, #182434 100%);
+  --grad-running: linear-gradient(120deg, #10372E 0%, #17594A 58%, #1F7561 100%);
+  --grad-running-bar: linear-gradient(90deg, #6FDCC0 0%, #A8ECD9 100%);
+  --run-fg: #EAF7F2;
+  --run-fg-2: rgba(234, 247, 242, .82);
+  --run-veil: rgba(255, 255, 255, .12);
+  --run-veil-2: rgba(255, 255, 255, .2);
+  --run-hi: #9FE8D5;
   --grad-mix-bar: linear-gradient(90deg, #2FA98D 0%, #6FDCC0 100%);
   --grad-focus: linear-gradient(100deg, #14241F 0%, #182434 100%);
   --grad-mastery-on: linear-gradient(140deg, #193330 0%, #182434 100%);
@@ -3613,6 +3675,60 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '</div>';
   }
 
+  /* ------------------------------------------------------------------
+     首页「正在计时」卡
+     计时器全局唯一（core 的 startTimer 会拒绝第二个），所以这里直接取 S.timer。
+     刷新策略：计时中每秒只由 syncTimerUI 改写 [data-timer-text]，不重建 DOM；
+     暂停/继续/结束这类会改变按钮形态的操作，由 ACT 里的 rerenderCurrent() 重渲染整页。
+     timer.date 可能不是今天（跨天未结束），此时仍展示并提示，结束后归入原日期。 */
+  function homeRunningHTML() {
+    var t = S.timer;
+    if (!t) return '';
+    var key = t.date || A.today();
+    var plan = A.planById(t.planId);
+    var title = plan ? plan.task : '（计划已删除）';
+    var subject = plan ? plan.subject : '未分类';
+    var sec = A.timerElapsed();
+    var spent = plan ? A.durationOfTask(key, t.planId) : 0;   // 当天已入库的时长
+    var needMin = plan ? A.planRequiredMin(plan) : A.DEFAULT_PLAN_MINUTES;
+    var pct = needMin > 0 ? A.clamp((spent + sec) / (needMin * 60) * 100, 0, 100) : 0;
+    var stale = key !== A.today();
+
+    return '<div class="card rise home-running' + (t.running ? '' : ' is-paused') + '" style="--d:0s">' +
+      '<div class="card-head"><div class="card-title"><span class="dot sec"></span>' +
+      (t.running ? '正在专注' : '计时已暂停') + '</div>' +
+      '<span class="tag ' + (t.running ? 'tag-running' : 'tag-pending') + '">' +
+      (t.running ? '计时中' : '已暂停') + '</span></div>' +
+      '<div class="home-run-body">' +
+      '<div class="home-run-main">' +
+      '<div class="home-run-task">' + esc(title) + '</div>' +
+      '<div class="home-run-meta">' + subjectTag(subject) +
+      (plan ? timeRangeHTML(plan.startTime || '--:--', plan.endTime || '--:--') : '') +
+      '<span class="tag">今日已投入 ' + esc(A.fmtDur(spent)) + '</span>' +
+      (stale ? '<span class="tag tag-running">跨天 · ' + esc(A.fmtDateCN(key)) + '</span>' : '') +
+      '</div>' +
+      /* 进度条底色由 .home-running .bar-fill 的 --grad-running-bar 提供（深底上要换成亮色） */
+      '<div class="bar-track home-run-bar"><div class="bar-fill" style="width:' +
+      Math.max(2, pct).toFixed(1) + '%"></div></div>' +
+      '<div class="home-run-hint">计划时长 ' + esc(A.fmtDur(needMin * 60)) +
+      ' · 含本次已进行 ' + pct.toFixed(0) + '%' +
+      (stale ? '（跨天未结束，结束后记入 ' + esc(A.fmtDateCN(key, false)) + '）' : '') + '</div>' +
+      '</div>' +
+      '<div class="home-run-clock">' +
+      '<div class="timer-value" data-timer-text>' + A.fmtClock(sec) + '</div>' +
+      '<div class="timer-hint"><span class="dot-live' + (t.running ? '' : ' paused') + '"></span> 起始 ' +
+      A.fmtTimeOfDay(t.firstStartedAt) + '</div>' +
+      '</div></div>' +
+      '<div class="home-run-actions">' +
+      (t.running
+        ? '<button class="btn btn-sm" data-act="timer-pause">' + ic('ic-pause', 14) + '暂停</button>'
+        : '<button class="btn btn-sm btn-primary" data-act="timer-resume" data-id="' + esc(t.planId) + '">' + ic('ic-play', 14) + '继续</button>') +
+      '<button class="btn btn-sm btn-secondary" data-act="timer-stop">' + ic('ic-stop', 14) + '结束打卡</button>' +
+      '<button class="btn btn-sm btn-danger" data-act="timer-discard">丢弃</button>' +
+      '<a class="btn btn-sm" href="#/checkin">' + ic('ic-play', 14) + '打卡页</a>' +
+      '</div></div>';
+  }
+
   /* ================================================================
      首页
      ================================================================ */
@@ -3737,6 +3853,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }).join('');
 
     root.innerHTML =
+      /* 计时中的任务置顶：不需要跳到打卡页就能暂停 / 结束 */
+      homeRunningHTML() +
       '<div class="grid grid-2 home-top-grid mb-16" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)">' +
       '<div class="card rise home-hero" style="--d:0s">' +
       '<div class="ring-wrap">' + ringHTML(pct, '今日完成') +
@@ -5731,8 +5849,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   };
   ACT['timer-resume'] = function (n) {
-    var id = n.getAttribute('data-id');
-    if (A.startTimer(id, A.today())) rerenderCurrent();
+    var t = S.timer;
+    var id = (n && n.getAttribute('data-id')) || (t && t.planId);
+    if (!t || !id) return;
+    // 续上计时器自己的日期：跨天未结束的计时继续后仍归入原日期，
+    // 若改用 today() 会被 startTimer 的「日期不一致」校验拦下并误报「已有任务在计时」
+    if (A.startTimer(id, t.date || A.today())) rerenderCurrent();
   };
   ACT['timer-pause'] = function () {
     A.pauseTimer();
@@ -6202,7 +6324,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ' title="主题：' + tLabel + '（点击切换）" aria-label="主题：' + tLabel + '（点击切换）">' +
       ic(tIcon, 15) + '</button>';
     var t = S.timer;
-    if (t && ui.route !== 'checkin') {
+    /* 首页已有置顶的「正在计时」卡（信息更全、还能直接暂停/结束），
+       这里再挂一个只显示时长的跳转按钮就是重复信息，故首页隐藏。 */
+    if (t && ui.route !== 'checkin' && ui.route !== 'home') {
       html += '<button class="btn btn-sm btn-primary" data-act="goto-timer">' +
         '<span class="dot-live' + (t.running ? '' : ' paused') + '"></span>' +
         '<span data-timer-text>' + A.fmtClock(A.timerElapsed()) + '</span></button>';
