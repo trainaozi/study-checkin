@@ -612,6 +612,28 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 .plan-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .plan-task { font-size: 15px; font-weight: 650; line-height: 1.45; letter-spacing: .1px; }
 .plan-item.done .plan-task { text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
+/* 过期（单次计划执行日已过）：整块弱化。标签沿用中性灰 .tag，不引入第三种颜色 */
+.plan-item.expired { opacity: .78; }
+.plan-item.expired .plan-task { color: var(--ink-2); }
+.tag-expired { opacity: .85; }
+/* 已完成任务：独立卡片 + 精简行（任务/科目/时段/用时/掌握度 + 重新打卡·删除） */
+.plan-done-card { margin-top: 16px; background: var(--card); }
+.plan-done-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+  padding: 9px 0; border-top: 1px solid var(--line-2);
+}
+.plan-done-item:first-child { border-top: none; padding-top: 0; }
+.pdi-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.pdi-task { font-weight: 600; text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
+/* 已过时段：沿用跨天计时卡的琥珀色描边作「待处理」提示（系统内已有色，不新增第三种） */
+.plan-overdue-card { border-color: var(--amber); }
+.pdi-overdue { text-decoration: none; color: var(--ink); }
+/* 过期项需保留「今日具体项目」，故整块改为纵向堆叠，标题行仍横向排布 */
+.pdi-block { display: block; }
+.pdi-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pdi-time, .pdi-dur { font-size: 12px; color: var(--muted); }
+.pdi-actions { display: flex; gap: 8px; flex: 0 0 auto; }
 .plan-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
 
 /* 首页「今日任务」：把原本左侧 4px 渐变条扩成容纳起止时间的色块，任务名居中放大 */
@@ -3958,6 +3980,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var focus = A.focusOf(key, plan.id);
     var elapsed = timer ? A.timerElapsed() : 0;
 
+    // 已过时段/已完成的任务都由 renderCheckin 分流到独立卡片，这里只处理「正常待办」
     var status = timer ? '<span class="tag tag-running">' + (timer.running ? '计时中' : '已暂停') + '</span>'
       : done ? '<span class="tag tag-done">已完成 · ' + recs.length + ' 次</span>'
         : '<span class="tag tag-pending">待打卡</span>';
@@ -3981,7 +4004,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           (r.note ? '<div style="color:var(--muted);font-size:12px">备注：' + esc(r.note) + '</div>' : '');
       }).join('') + '</div>' : '';
 
-    return '<div class="card plan-item checkin-card rise' + (done ? ' done' : '') + (timer ? ' active-timer' : '') + '" ' +
+    return '<div class="card plan-item checkin-card rise' + (done ? ' done' : '') +
+      (timer ? ' active-timer' : '') + '" ' +
       'style="--d:' + (idx * 0.06).toFixed(2) + 's">' +
       '<div class="plan-item-head"><div class="plan-task">' + esc(plan.task) + '</div>' + status + '</div>' +
       '<div class="plan-meta">' + subjectTag(plan.subject) + timeRangeHTML(plan.startTime, plan.endTime) +
@@ -3999,6 +4023,56 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<button class="btn btn-sm" data-act="focus-edit" data-id="' + plan.id + '">' + ic('ic-book', 14) + '今日项目</button>' +
       (done ? '<a class="btn btn-sm" href="#/history">查看记录</a>' : '') +
       '</div></div>';
+  }
+
+  /* 已完成的任务单独一张卡（打卡页用）：只保留任务/科目/时段/用时/掌握度等小信息，
+     以及「重新打卡」「查看记录」等必要按钮，去掉编辑/今日项目/删除等冗余操作。 */
+  function donePlansCardHTML(doneList, key) {
+    if (!doneList.length) return '';
+    return '<div class="card rise plan-done-card" style="--d:.06s">' +
+      '<div class="card-head"><div class="card-title"><span class="dot"></span>今日已完成</div>' +
+      '<span class="card-desc">' + doneList.length + ' 条</span></div>' +
+      '<div class="plan-done-list">' + doneList.map(function (p) {
+        var rs = A.recordsOfTask(key, p.id);
+        return '<div class="plan-done-item">' +
+          '<div class="pdi-main"><span class="pdi-task">' + esc(p.task) + '</span>' +
+          subjectTag(p.subject) +
+          '<span class="pdi-time">' + esc(p.startTime) + '–' + esc(p.endTime) + '</span>' +
+          '<span class="pdi-dur">' + esc(A.fmtDur(A.durationOfTask(key, p.id))) + '</span>' +
+          rs.map(function (r) { return masteryTag(r.mastery); }).join('') +
+          '</div>' +
+          '<div class="pdi-actions">' +
+          '<button class="btn btn-sm btn-primary" data-act="timer-start" data-id="' + p.id + '">' +
+          ic('ic-play', 14) + '重新打卡</button>' +
+          '<a class="btn btn-sm" href="#/history">查看记录</a>' +
+          '</div></div>';
+      }).join('') + '</div></div>';
+  }
+
+  /* 已过时段（当日时段已过且未打卡）也单独一张卡，按钮贴合「错过待补」的逻辑：
+     补打卡（现在补上，走计时）+ 改时间（去计划页调整时段）。不给删除/查看记录（尚无任何记录）。 */
+  function overduePlansCardHTML(list, key) {
+    if (!list.length) return '';
+    return '<div class="card rise plan-done-card plan-overdue-card" style="--d:.05s">' +
+      '<div class="card-head"><div class="card-title"><span class="dot sec"></span>已过时段</div>' +
+      '<span class="card-desc">' + list.length + ' 条 · 尚未打卡</span></div>' +
+      '<div class="plan-done-list">' + list.map(function (p) {
+        /* 过期≠结束：仍保留「今日具体项目」，补打卡时还能照着清单做、照常勾选 */
+        return '<div class="plan-done-item pdi-block">' +
+          '<div class="pdi-line">' +
+          '<div class="pdi-main"><span class="pdi-task pdi-overdue">' + esc(p.task) + '</span>' +
+          subjectTag(p.subject) +
+          '<span class="pdi-time">' + esc(p.startTime) + '–' + esc(p.endTime) + '</span>' +
+          '<span class="tag tag-expired">已过时段</span>' +
+          '</div>' +
+          '<div class="pdi-actions">' +
+          '<button class="btn btn-sm btn-primary" data-act="timer-start" data-id="' + p.id + '">' +
+          ic('ic-play', 14) + '补打卡</button>' +
+          '<a class="btn btn-sm" href="#/plan">改时间</a>' +
+          '</div></div>' +
+          todayItemsHTML(key, p.id, true) +
+          '</div>';
+      }).join('') + '</div></div>';
   }
 
   function renderCheckin(root) {
@@ -4046,15 +4120,38 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       (plans.length ? '<div class="card-desc" style="margin-top:2px;font-size:11.5px;color:var(--muted)">完成度按各计划时段时长加权；未设置时段的计划按默认 ' + A.DEFAULT_PLAN_MINUTES + ' 分钟计。</div>' : '') +
       '</div>';
 
-    var list = plans.length
-      ? plans.map(function (p, i) { return taskCardHTML(p, t, i); }).join('')
-      : emptyState({
-        emoji: '☕', title: '今天没有待打卡的任务',
-        desc: '去「每日计划」添加计划，或直接建一个今日临时任务。',
-        action: '<div class="chip-row" style="justify-content:center">' +
-          '<a class="btn btn-primary" href="#/plan">' + ic('ic-plan', 16) + '去建计划</a>' +
-          '<button class="btn" data-act="quick-add-task">' + ic('ic-plus', 16) + '临时任务</button></div>'
-      });
+    /* 已完成的分到独立卡片；未完成里「当日时段已过」的置底。
+       正在计时的任务即使已有记录也留在待办区（它正在进行中）。 */
+    var nowMin = (function () { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); })();
+    function timing(p) { return !!(S.timer && S.timer.planId === p.id); }
+    function isOverdue(p) {
+      return !A.isTaskDone(t, p.id) && !timing(p) && A.timeToMin(p.endTime) <= nowMin;
+    }
+    function byTime(a, b) {
+      return A.timeToMin(a.startTime) - A.timeToMin(b.startTime) || b.createdAt - a.createdAt;
+    }
+    var donePlans = plans.filter(function (p) { return A.isTaskDone(t, p.id) && !timing(p); });
+    var rest = plans.filter(function (p) { return donePlans.indexOf(p) < 0; });
+    var overduePlans = rest.filter(isOverdue).sort(byTime);
+    var todoPlans = rest.filter(function (p) { return !isOverdue(p); }).sort(byTime);
+
+    var list = todoPlans.length
+      ? todoPlans.map(function (p, i) { return taskCardHTML(p, t, i); }).join('')
+      : (overduePlans.length
+        ? '<div class="card rise" style="--d:.02s"><div class="card-desc" style="padding:2px 2px">' +
+          '今日待办已清空 —— 下面是「已过时段」与「今日已完成」的任务。</div></div>'
+        : (donePlans.length
+          ? '<div class="card rise" style="--d:.02s"><div class="card-desc" style="padding:2px 2px">' +
+            '今日计划已全部完成 🎉 详见下方「今日已完成」。</div></div>'
+          : emptyState({
+            emoji: '☕', title: '今天没有待打卡的任务',
+            desc: '去「每日计划」添加计划，或直接建一个今日临时任务。',
+            action: '<div class="chip-row" style="justify-content:center">' +
+              '<a class="btn btn-primary" href="#/plan">' + ic('ic-plan', 16) + '去建计划</a>' +
+              '<button class="btn" data-act="quick-add-task">' + ic('ic-plus', 16) + '临时任务</button></div>'
+          })));
+    var overdueCard = overduePlansCardHTML(overduePlans, t);
+    var doneCard = donePlansCardHTML(donePlans, t);
 
     var orphanHTML = orphan.length ? '<div class="card rise mt-16" style="--d:.1s">' +
       '<div class="card-head"><div class="card-title"><span class="dot sec"></span>今日其它记录</div>' +
@@ -4065,7 +4162,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           '<span class="tag">' + esc(A.fmtDur(r.durationSec)) + '</span></div></div>';
       }).join('') + '</div>' : '';
 
-    root.innerHTML = head + stale + list + orphanHTML;
+    root.innerHTML = head + stale + list + overdueCard + doneCard + orphanHTML;
   }
 
   /* ================================================================
@@ -4139,6 +4236,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function planListHTML() {
     var t = A.today();
     var filter = ui.planFilter;
+    /* 计划页只按时间顺序展示（不做过期/完成分档 —— 那套逻辑在打卡页） */
     var list = S.plans.slice().sort(function (a, b) {
       return A.timeToMin(a.startTime) - A.timeToMin(b.startTime) || b.createdAt - a.createdAt;
     });
@@ -4162,7 +4260,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var applies = A.planAppliesTo(p, t);
       var focus = A.focusOf(t, p.id);
       var done = A.isTaskDone(t, p.id);
-      return '<div class="plan-item rise' + (done ? ' done' : '') + '" style="--d:' + (i * 0.05).toFixed(2) + 's">' +
+      // 错峰动画延迟封顶 0.6s，避免计划多时末尾等太久
+      return '<div class="plan-item rise' + (done ? ' done' : '') +
+        '" style="--d:' + (Math.min(i, 12) * 0.05).toFixed(2) + 's">' +
         '<div class="plan-item-head"><div class="plan-task">' + esc(p.task) + '</div>' +
         (applies ? (done ? '<span class="tag tag-done">今日已完成</span>' : '<span class="tag tag-pending">今日待做</span>') : '') +
         '</div>' +
@@ -4219,28 +4319,40 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      ================================================================ */
   ACT['plan-tpl-download'] = function () {
     if (typeof window.XLSX === 'undefined') { A.toast('Excel 库未加载，请刷新重试', 'warn'); return; }
+    /* 布局：第 1 行标题(合并 A1:H1) → 第 2 行表头 → 第 3 行示例 → 第 4 行起由用户填写。
+       I 列只放提示文字，不在表头里，导入解析时不会被当成星期列。
+       注：内联的 SheetJS 为社区版 0.18.5，写不出字体/底色等单元格样式，
+       因此可读性靠结构（标题行、列宽、行高、两列对照的说明表）而非颜色实现。 */
     var grid = [
-      ['时间', '周一', '周二', '周三', '周四', '周五', '周六', '周日'],
-      ['7:30-8:10', '起床背单词', '起床背单词', '起床背单词', '英语阅读', '起床背单词', '', '']
+      ['学习计划模板 · 周课表（每行一个时间段，格子里填当天任务）', '', '', '', '', '', '', '', ''],
+      ['时间', '周一', '周二', '周三', '周四', '周五', '周六', '周日', ''],
+      ['07:30-08:10', '背新词① 60个', '背新词① 60个', '背新词① 60个', '背新词① 60个', '背新词① 60个', '背新词① 60个', '', '← 示例行，导入前请整行删除']
     ];
     var ws = window.XLSX.utils.aoa_to_sheet(grid);
-    ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    ws['!cols'] = [{ wch: 15 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 30 }];
+    ws['!rows'] = [{ hpt: 28 }, { hpt: 22 }, { hpt: 20 }];
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+
+    // 说明改成「要点 / 说明」两列对照表，比整段长句更好扫读
     var helpRows = [
-      ['填写说明', ''],
-      ['1. 每行代表一个时间段，A 列填写起止时间，格式如 7:30-8:10（开始-结束，半角减号连接）。', ''],
-      ['2. B~H 列分别对应周一至周日，在对应日期的格子里填写当天任务（如「高数新课」）。', ''],
-      ['3. 同一任务若每天都有，请在对应日期的格子都填上。', ''],
-      ['4. 如需指定科目，可在任务前加「科目·」分隔，例如「数学·高数新课」；不写的科目默认「未分类」。', ''],
-      ['5. 第 2 行为示例数据，请整行删除后再填写并导入；留空的格子不会被导入。', ''],
-      ['6. 合并规则：同一任务（科目+任务+起止时间完全相同）在多个星期出现时，若这些星期连续或等间隔', ''],
-      ['   （如周一~周六、周六~周一、周一/三/五），会合并为一条计划，显示为「每周一~周六」。', ''],
-      ['   任务名称或内嵌数量不同（如「背新词① 60个」与「复习旧词②120个」）、时间不同，均不会合并。', ''],
-      ['   星期零散无规律（如只有周一和周四）也不合并，按星期拆成多条。', ''],
-      ['7. 库中已存在的计划（科目+任务+时间+星期 完全相同）会自动跳过，不重复添加。', ''],
-      ['8. 导入后可在「每日计划」页编辑、删除每条计划。', '']
+      ['学习计划模板 · 填写说明', ''],
+      ['要点', '说明'],
+      ['表格结构', '第 1 行标题、第 2 行表头（时间 / 周一~周日）、第 3 行示例；请从第 4 行开始填写。'],
+      ['每行含义', '一行 = 一个时间段。A 列填起止时间，B~H 列分别对应周一至周日。'],
+      ['时间格式', '开始-结束，半角减号，如 7:30-8:10；写成 9:00 也会自动补成 09:00。'],
+      ['填写任务', '在对应日期的格子里填写当天任务，如「高数新课」；格子留空则该天不导入。'],
+      ['指定科目', '写成「科目·任务」，如「数学·高数新课」；不写则科目默认为「未分类」。'],
+      ['合并规则', '同一任务（科目 + 任务 + 起止时间完全相同）在多个星期出现，且这些星期连续或等间隔（周一~周六、周一/三/五）时，合并为一条计划，显示为「每周一~六」。'],
+      ['不会合并', '任务名或内嵌数量不同（如「背新词① 60个」与「复习旧词②120个」）、起止时间不同、星期零散无规律（如只有周一和周四）。'],
+      ['自动去重', '库中已存在的（科目 + 任务 + 时间 + 星期 完全相同）自动跳过，重复导入不会重复添加。'],
+      ['示例行', '第 3 行为示例，导入前请整行删除；即使没删除也会自动跳过。'],
+      ['导入后', '可在「每日计划」页编辑、删除每条计划。']
     ];
     var ws2 = window.XLSX.utils.aoa_to_sheet(helpRows);
-    ws2['!cols'] = [{ wch: 72 }, { wch: 4 }];
+    ws2['!cols'] = [{ wch: 14 }, { wch: 92 }];
+    ws2['!rows'] = [{ hpt: 28 }, { hpt: 22 }];
+    ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+
     var wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, '学习计划');
     window.XLSX.utils.book_append_sheet(wb, ws2, '填写说明');
@@ -4301,7 +4413,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if (wdMap.hasOwnProperty(ht)) wdCols[wdMap[ht]] = hc;
     }
     if (!Object.keys(wdCols).length) { errors.push('表头缺少星期列（周一~周日）'); return { plans: plans, errors: errors, skippedExample: 0 }; }
-    var exSig = JSON.stringify({ time: '7:30-8:10', cells: [[1, '起床背单词'], [2, '起床背单词'], [3, '起床背单词'], [4, '英语阅读'], [5, '起床背单词']] });
+    var exSig = JSON.stringify({
+      time: '07:30-08:10',
+      cells: [[1, '背新词① 60个'], [2, '背新词① 60个'], [3, '背新词① 60个'],
+        [4, '背新词① 60个'], [5, '背新词① 60个'], [6, '背新词① 60个']]
+    });
     for (var ri = hIdx + 1; ri < rows.length; ri++) {
       var row = rows[ri] || [];
       var timeStr = String(row[timeCol] || '').trim();
