@@ -368,6 +368,9 @@ a { color: var(--primary-dark); text-decoration: none; }
 .card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
 .card-title .dot.sec { background: var(--secondary); }
 .card-desc { font-size: 12px; color: var(--muted); }
+.card-head-right { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.err-list { margin: 0; padding-left: 18px; max-height: 240px; overflow: auto; }
+.err-list li { margin: 4px 0; font-size: 13px; color: var(--ink-2); }
 
 .grid { display: grid; gap: 16px; }
 .grid-kpi { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
@@ -2228,6 +2231,200 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return store;
   }
 
+  /* --------------------------------------------------- 演示数据（分享 / 投稿用）
+     打开带 ?demo=1 的链接（如 index.html?demo=1#/home）时，若本地确实没有任何数据，
+     就在浏览器里现场生成一份「最近 21 天」的示例数据，让第一次打开的人立刻看到完整形态：
+     首页有今日任务、看板有趋势图、历史有明细、打卡页有可勾选的小节。
+     两道安全阀，缺一不可：① 必须显式带 demo=1；② 本地已有任何计划 / 记录 / 章节则完全不生效。
+     所以它永远不会覆盖真实数据，也不会对日常使用产生任何影响。 */
+
+  /** 固定种子的线性同余：每次生成的数据完全一致，截图与评审看到的是同一份 */
+  function demoRnd() {
+    var s = 1024;
+    return function () { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+  }
+
+  var DEMO_SUBJECTS = [
+    {
+      name: '数学', start: '19:00', end: '20:30', chapters: [
+        { title: '极限与连续', sections: ['数列极限的定义', '夹逼准则', '两个重要极限', '无穷小的比较'] },
+        { title: '导数与微分', sections: ['导数的定义', '四则运算求导', '复合函数求导', '高阶导数'] }
+      ]
+    },
+    {
+      name: '英语', start: '07:30', end: '08:15', chapters: [
+        { title: '核心词汇', sections: ['List 1-2', 'List 3-4', 'List 5-6'] },
+        { title: '长难句', sections: ['定语从句拆分', '状语从句', '倒装与强调'] }
+      ]
+    },
+    {
+      name: '专业课', start: '20:40', end: '21:40', chapters: [
+        { title: '数据结构', sections: ['线性表', '栈与队列', '树与二叉树', '图的遍历'] }
+      ]
+    }
+  ];
+
+  function buildDemoStore() {
+    var rnd = demoRnd();
+    var between = function (a, b) { return a + Math.round(rnd() * (b - a)); };
+    var chance = function (p) { return rnd() < p; };
+
+    var dayMs = 86400000;
+    var now = Date.now();
+    var keys = [];
+    for (var i = 20; i >= 0; i--) keys.push(dateKey(new Date(now - i * dayMs)));  // 21 天，含今天
+    var sinceKey = keys[0];
+    var todayKey = keys[keys.length - 1];
+    var sinceTs = parseKey(sinceKey).getTime();
+
+    var plans = [], chapters = [], records = [], days = {}, nodePlans = {};
+    var subjectPlan = {};   // 学科 → 主计划 id
+
+    DEMO_SUBJECTS.forEach(function (sub) {
+      /* 1) 章节结构（小节带预计分钟，供完成度与 ETA 计算） */
+      sub.chapters.forEach(function (c, ci) {
+        var chapId = uid('chap');
+        chapters.push({
+          id: chapId,
+          subject: sub.name,
+          title: c.title,
+          sections: c.sections.map(function (t) {
+            return { id: uid('sec'), title: t, estMin: between(25, 45) };
+          }),
+          note: '', createdAt: sinceTs + ci * 1000, updatedAt: sinceTs + ci * 1000
+        });
+      });
+
+      /* 2) 每天固定时段的主计划 */
+      var pid = uid('plan');
+      subjectPlan[sub.name] = pid;
+      plans.push({
+        id: pid, subject: sub.name, task: sub.name + '每日任务',
+        startTime: sub.start, endTime: sub.end,
+        repeat: { type: 'daily', date: sinceKey, since: sinceKey, weekdays: [] },
+        note: '', createdAt: sinceTs, updatedAt: sinceTs
+      });
+      nodePlans['subj:' + sub.name] = { planIds: [pid], updatedAt: sinceTs };
+    });
+
+    /* 3) 周末数学加练（按星期重复，演示 weekly 类型） */
+    var extraId = uid('plan');
+    plans.push({
+      id: extraId, subject: '数学', task: '周末真题加练',
+      startTime: '14:00', endTime: '16:00',
+      repeat: { type: 'weekly', date: sinceKey, since: sinceKey, weekdays: [0, 6] },
+      note: '两套真题，卡时间做', createdAt: sinceTs, updatedAt: sinceTs
+    });
+
+    var allPlans = plans.slice();
+    var mathChapters = chapters.filter(function (c) { return c.subject === '数学'; });
+
+    /* 4) 逐天生成记录：工作日更规律，周末略松；掌握度随天数缓慢上升 */
+    keys.forEach(function (key, idx) {
+      var wd = weekdayOf(key);
+      var isWeekend = (wd === 0 || wd === 6);
+      var base = parseKey(key).getTime();
+      var dayPlans = allPlans.filter(function (p) {
+        if (p.repeat.type === 'daily') return true;
+        return p.repeat.weekdays.indexOf(wd) >= 0;
+      });
+
+      var focus = {}, sel = {}, done = {}, manuals = {};
+
+      dayPlans.forEach(function (p) {
+        var rate = isWeekend ? 0.62 : 0.85;
+        /* 今天只预置一条「早读已完成」，其余留给使用者亲手打卡体验——
+           既让首屏有真实数据（今日时长、已完成标记），又保留可操作空间。 */
+        if (key === todayKey && p.subject !== '英语') return;
+        if (key !== todayKey && !chance(rate)) return;
+
+        var span = (parseInt(p.endTime.slice(0, 2), 10) * 60 + parseInt(p.endTime.slice(3), 10)) -
+          (parseInt(p.startTime.slice(0, 2), 10) * 60 + parseInt(p.startTime.slice(3), 10));
+        var minutes = Math.max(25, Math.round(span * (0.62 + rnd() * 0.45)));
+        var startedAt = base + (parseInt(p.startTime.slice(0, 2), 10) * 3600 +
+          parseInt(p.startTime.slice(3), 10) * 60) * 1000;
+
+        records.push({
+          id: uid('rec'),
+          date: key,
+          planId: p.id,
+          subject: p.subject,
+          task: p.task,
+          focus: p.subject === '数学' ? '例题 + 错题整理' : (p.subject === '英语' ? '背单词 + 精读' : '概念 + 代码手写'),
+          planStart: p.startTime, planEnd: p.endTime,
+          startedAt: startedAt, endedAt: startedAt + minutes * 60000,
+          durationSec: minutes * 60,
+          mastery: clamp(3 + Math.floor(rnd() * 2.2) + (idx > 13 ? 1 : 0), 1, 5),
+          note: '', createdAt: startedAt + minutes * 60000
+        });
+
+        /* 当天勾选的小节：从该学科章节里挑 2~3 个，留一个没做完 */
+        if (chance(0.75)) {
+          var chs = chapters.filter(function (c) { return c.subject === p.subject; });
+          if (chs.length) {
+            var ch = chs[Math.floor(rnd() * chs.length) % chs.length];
+            var ids = ch.sections.slice(0, between(2, 3)).map(function (s) { return s.id; });
+            sel[p.id] = ids;
+            var dm = {};
+            ids.forEach(function (sid, i2) { if (!(i2 === ids.length - 1 && chance(0.45))) dm[sid] = 1; });
+            done[p.id] = dm;
+            focus[p.id] = p.subject === '数学' ? '把例题过一遍' : '按计划推进';
+          }
+        }
+      });
+
+      /* 5) 今天：给两个学科预先选好小节，让打卡页一进来就有可勾选的条目 */
+      if (key === todayKey) {
+        ['数学', '英语'].forEach(function (sn, si) {
+          var pid2 = subjectPlan[sn];
+          var chs2 = chapters.filter(function (c) { return c.subject === sn; });
+          if (!chs2.length) return;
+          var ch2 = chs2[si % chs2.length];
+          var ids2 = ch2.sections.slice(0, 3).map(function (s) { return s.id; });
+          sel[pid2] = ids2;
+          var dm2 = {};
+          dm2[ids2[0]] = 1;                       // 第一个已完成，其余待打卡
+          done[pid2] = dm2;
+          focus[pid2] = sn === '数学' ? '先做定义题，再练计算' : '早读先过单词';
+        });
+        manuals[subjectPlan['数学']] = [{ id: uid('mi'), label: '整理今天的错题本', done: false }];
+      }
+
+      days[key] = { date: key, focus: focus, sel: sel, done: done, manuals: manuals, createdAt: base };
+    });
+
+    /* 6) 大章级 ETA：把每个大章挂到对应学科的计划上 */
+    chapters.forEach(function (c) {
+      nodePlans['ch:' + c.id] = { planIds: [subjectPlan[c.subject]].filter(Boolean), updatedAt: sinceTs };
+    });
+
+    var d = defaultStore();
+    d.createdAt = sinceTs;
+    d.updatedAt = now;
+    d.plans = plans;
+    d.chapters = chapters;
+    d.records = records;
+    d.days = days;
+    d.nodePlans = nodePlans;
+    d.timer = null;
+    return d;
+  }
+
+  /** 只在「显式带 demo=1」且「本地确认为空」时载入演示数据；返回是否载入 */
+  function maybeLoadDemo() {
+    if (!/[?&]demo=1\b/.test(String(location.search || '') + '&' + String(location.hash || ''))) return false;
+    if (!storageOK) return false;
+    if (store.plans.length || store.records.length || store.chapters.length) return false;
+    try {
+      loadStoreObject(buildDemoStore());
+      saveStore();
+      pendingNotice = '已载入演示数据（最近 21 天示例）。想从零开始时，在「历史 → 数据管理 → 清空数据」一键清除即可。';
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /* --------------------------------------------------- 业务查询与操作 */
   function ensureDay(key) {
     if (!store.days[key]) store.days[key] = { date: key, focus: {}, sel: {}, done: {}, manuals: {}, createdAt: Date.now() };
@@ -3199,6 +3396,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     DEFAULT_PLAN_MINUTES: DEFAULT_PLAN_MINUTES, planRequiredMin: planRequiredMin, completionPct: completionPct,
     // 数据
     store: store, save: saveStore, loadStoreObject: loadStoreObject, storageOK: storageOK,
+    buildDemoStore: buildDemoStore, maybeLoadDemo: maybeLoadDemo,
     ensureDay: ensureDay, focusOf: focusOf, setFocus: setFocus, markDeleted: markDeleted,
     planAppliesTo: planAppliesTo, plansOfDay: plansOfDay, planById: planById,
     recordsOfDay: recordsOfDay, recordsOfTask: recordsOfTask, durationOfTask: durationOfTask,
@@ -3235,6 +3433,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     renderView: function () { }, renderPageActions: function () { }, syncTimerUI: function () { },
     boot: function () {
       applyTheme(themePref(), false);   // 首屏已由内联脚本预置，这里再同步一次 meta 主题色
+      maybeLoadDemo();                  // 仅 ?demo=1 且本地为空时生效
       initParticles();
       // 跨天遗留计时：自动暂停并提示
       if (store.timer && store.timer.date !== today()) {
@@ -3813,7 +4012,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
 
     return '<div class="card-head"><div class="card-title"><span class="dot sec"></span>计划列表</div>' +
-      '<span class="card-desc">' + list.length + ' 条</span></div>' +
+      '<div class="card-head-right"><span class="card-desc">' + list.length + ' 条</span>' +
+      '<button class="btn btn-sm" data-act="plan-tpl-download">' + ic('ic-download', 14) + '模板</button>' +
+      '<button class="btn btn-sm" data-act="plan-import">' + ic('ic-plus', 14) + '导入</button>' +
+      '</div></div>' +
       '<div class="chip-row mb-16">' + chips + '</div>' + body;
   }
 
@@ -3830,6 +4032,188 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function refreshPlanList() {
     var w = $('#plan-list-wrap');
     if (w) w.innerHTML = planListHTML();
+  }
+
+  /* ================================================================
+     计划页 Excel 导入 / 导出
+     模板为「周课表网格」：A 列=时间(如 7:30-8:10)，B~H 列=周一~周日。
+     每个非空格子 = 一条按该星期重复的周计划；科目可用「科目·任务」写法指定。
+     ================================================================ */
+  ACT['plan-tpl-download'] = function () {
+    if (typeof window.XLSX === 'undefined') { A.toast('Excel 库未加载，请刷新重试', 'warn'); return; }
+    var grid = [
+      ['时间', '周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+      ['7:30-8:10', '起床背单词', '起床背单词', '起床背单词', '英语阅读', '起床背单词', '', '']
+    ];
+    var ws = window.XLSX.utils.aoa_to_sheet(grid);
+    ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    var helpRows = [
+      ['填写说明', ''],
+      ['1. 每行代表一个时间段，A 列填写起止时间，格式如 7:30-8:10（开始-结束，半角减号连接）。', ''],
+      ['2. B~H 列分别对应周一至周日，在对应日期的格子里填写当天任务（如「高数新课」）。', ''],
+      ['3. 同一任务若每天都有，请在对应日期的格子都填上。', ''],
+      ['4. 如需指定科目，可在任务前加「科目·」分隔，例如「数学·高数新课」；不写的科目默认「未分类」。', ''],
+      ['5. 第 2 行为示例数据，请整行删除后再填写并导入；留空的格子不会被导入。', ''],
+      ['6. 重复的计划（科目+任务+时间+星期 完全相同）会自动跳过，不重复添加。', ''],
+      ['7. 导入后可在「每日计划」页编辑、删除每条计划。', '']
+    ];
+    var ws2 = window.XLSX.utils.aoa_to_sheet(helpRows);
+    ws2['!cols'] = [{ wch: 72 }, { wch: 4 }];
+    var wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, '学习计划');
+    window.XLSX.utils.book_append_sheet(wb, ws2, '填写说明');
+    window.XLSX.writeFile(wb, '学习计划模板.xlsx');
+    A.toast('模板已下载，填写后导入', 'ok');
+  };
+
+  ACT['plan-import'] = function () {
+    var inp = $('#plan-import-file');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'file'; inp.id = 'plan-import-file'; inp.accept = '.xlsx,.xls,.csv';
+      inp.style.display = 'none';
+      inp.addEventListener('change', handlePlanImportFile);
+      document.body.appendChild(inp);
+    }
+    inp.click();
+  };
+
+  // 把 HH:MM 规整为两位小时/分钟，容错 Excel 里常见的 9:00 / 9:0 写法
+  function padTime(t) {
+    var m = /^(\d{1,2}):(\d{1,2})$/.exec(String(t || ''));
+    if (!m) return t;
+    return ('0' + m[1]).slice(-2) + ':' + ('0' + m[2]).slice(-2);
+  }
+
+  function parseTimeRange(str) {
+    if (!str) return null;
+    var s = String(str).trim().replace(/[~～—–]/g, '-');
+    var m = s.match(/\d{1,2}:\d{1,2}/g);
+    if (!m || m.length < 2) return null;
+    var a = padTime(m[0]), b = padTime(m[1]);
+    if (!A.isTimeStr(a) || !A.isTimeStr(b)) return null;
+    return [a, b];
+  }
+
+  // 周课表网格 → 候选计划 + 错误行。列：0=时间，1~7=周一~周日（周日索引 0）。
+  function parsePlanGrid(rows) {
+    var errors = [], plans = [], skippedExample = 0;
+    if (!rows || !rows.length) return { plans: plans, errors: ['文件为空或无法读取'], skippedExample: 0 };
+    // 定位表头：含「时间」且含星期列
+    var hIdx = -1, head = null, timeCol = 0, wdCols = {};
+    var wdMap = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 0 };
+    for (var i = 0; i < Math.min(rows.length, 15); i++) {
+      var r = rows[i] || [];
+      var hasTime = false, hasWeek = false;
+      for (var c = 0; c < r.length; c++) {
+        var t = String(r[c] || '').trim();
+        if (/时间/.test(t)) hasTime = true;
+        if (wdMap.hasOwnProperty(t)) hasWeek = true;
+      }
+      if (hasTime && hasWeek) { hIdx = i; head = r; break; }
+    }
+    if (hIdx < 0) { errors.push('未找到表头行（首行应包含「时间」与「周一」~「周日」）'); return { plans: plans, errors: errors, skippedExample: 0 }; }
+    for (var hc = 0; hc < head.length; hc++) {
+      var ht = String(head[hc] || '').trim();
+      if (/时间/.test(ht)) timeCol = hc;
+      if (wdMap.hasOwnProperty(ht)) wdCols[wdMap[ht]] = hc;
+    }
+    if (!Object.keys(wdCols).length) { errors.push('表头缺少星期列（周一~周日）'); return { plans: plans, errors: errors, skippedExample: 0 }; }
+    var exSig = JSON.stringify({ time: '7:30-8:10', cells: [[1, '起床背单词'], [2, '起床背单词'], [3, '起床背单词'], [4, '英语阅读'], [5, '起床背单词']] });
+    for (var ri = hIdx + 1; ri < rows.length; ri++) {
+      var row = rows[ri] || [];
+      var timeStr = String(row[timeCol] || '').trim();
+      var cells = [];
+      Object.keys(wdCols).forEach(function (wd) {
+        var v = String(row[wdCols[wd]] || '').trim();
+        if (v) cells.push({ wd: Number(wd), v: v });
+      });
+      if (!cells.length) continue; // 整行无任务：视为空行，跳过，不计错误
+      var sig = JSON.stringify({ time: timeStr, cells: cells.map(function (x) { return [x.wd, x.v]; }) });
+      if (sig === exSig) { skippedExample++; continue; } // 模板自带示例行，自动跳过
+      var times = parseTimeRange(timeStr);
+      if (!times) { errors.push('第 ' + (ri + 1) + ' 行：时间格式错误（应为 7:30-8:10）'); continue; }
+      cells.forEach(function (cell) {
+        var raw = cell.v;
+        var subject = '未分类', task = raw, si = -1;
+        var dots = ['·', '・', '｜'];
+        for (var d = 0; d < dots.length; d++) { var idx = raw.indexOf(dots[d]); if (idx > 0) { si = idx; break; } }
+        if (si > 0) { subject = raw.slice(0, si).trim(); task = raw.slice(si + 1).trim(); }
+        if (!task) task = subject;
+        plans.push({ subject: subject, task: task, startTime: times[0], endTime: times[1], weekday: cell.wd });
+      });
+    }
+    return { plans: plans, errors: errors, skippedExample: skippedExample };
+  }
+
+  function existingWeeklyKeys() {
+    var set = {};
+    S.plans.forEach(function (p) {
+      if (p.repeat && p.repeat.type === 'weekly') {
+        var sk = p.subject, tk = p.task, st = padTime(p.startTime), et = padTime(p.endTime);
+        (p.repeat.weekdays || []).forEach(function (w) {
+          set[sk + '|' + tk + '|' + st + '|' + et + '|' + w] = 1;
+        });
+      }
+    });
+    return set;
+  }
+
+  function handlePlanImportFile(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (typeof window.XLSX === 'undefined') { A.toast('Excel 解析库未加载，请刷新重试', 'warn'); return; }
+    var reader = new FileReader();
+    reader.onload = function (evt) {
+      try {
+        var data = new Uint8Array(evt.target.result);
+        var wb = window.XLSX.read(data, { type: 'array' });
+        var name = (wb.SheetNames.filter(function (n) { return /计划/.test(n); })[0]) || wb.SheetNames[0];
+        var ws = wb.Sheets[name];
+        var rows = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        var res = parsePlanGrid(rows);
+        if (!res.plans.length && !res.errors.length) {
+          A.toast('未读取到任何计划，请检查模板（首行应为：时间/周一..周日）', 'warn');
+        } else {
+          var batch = {}, exKeys = existingWeeklyKeys(), added = 0, dup = 0;
+          res.plans.forEach(function (p) {
+            var key = p.subject + '|' + p.task + '|' + padTime(p.startTime) + '|' + padTime(p.endTime) + '|' + p.weekday;
+            if (batch[key] || exKeys[key]) { dup++; return; }
+            batch[key] = 1;
+            S.plans.push({
+              id: A.uid('plan'), subject: p.subject, task: p.task,
+              startTime: p.startTime, endTime: p.endTime,
+              repeat: { type: 'weekly', date: A.today(), since: A.today(), weekdays: [p.weekday] },
+              note: '', createdAt: Date.now(), updatedAt: Date.now()
+            });
+            added++;
+          });
+          if (added) A.save();
+          showPlanImportResult({ added: added, dup: dup, errors: res.errors, skippedExample: res.skippedExample });
+          if (added || dup) { refreshPlanList(); A.renderNav(); }
+        }
+      } catch (err) {
+        A.toast('解析失败：' + (err.message || err), 'warn');
+      }
+      e.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function showPlanImportResult(r) {
+    var msg = '成功添加 <b>' + r.added + '</b> 条计划' +
+      (r.dup ? '，跳过重复 <b>' + r.dup + '</b> 条' : '') +
+      (r.skippedExample ? '，跳过示例 <b>' + r.skippedExample + '</b> 行' : '') +
+      (r.errors.length ? '，<b style="color:var(--warn)">' + r.errors.length + '</b> 行有误' : '') + '。';
+    var errHtml = r.errors.length
+      ? '<div class="hint" style="margin:12px 0 6px">以下行未能导入：</div>' +
+        '<ul class="err-list">' + r.errors.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul>'
+      : '';
+    A.openModal({
+      title: '导入结果',
+      body: '<div class="plan-import-result">' + msg + errHtml +
+        '<div class="modal-foot"><button type="button" class="btn btn-primary" data-act="modal-close">知道了</button></div></div>'
+    });
   }
 
   /* ================================================================
