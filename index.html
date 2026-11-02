@@ -545,7 +545,38 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 
 /* -------------------------------------------------------- 计划 / 任务 */
 .plan-layout { display: grid; grid-template-columns: 372px minmax(0, 1fr); gap: 18px; align-items: start; }
+
+/* 计划页滚动：表单常驻可见 + 列表独立滚动
+   根因：表单是 sticky，当它高于视口时下半部分被钉在屏幕外，只有把整条列表滚到底
+   （sticky 释放）才够得着；而列表与页面只共用一条滚动条，二者互相抢占。
+   改法：两列各自按「视口高度 - 顶部占用」封顶（min-height:0 让高度正确传递），
+   列表内部滚动；表单仅在确实高于可视高度时才自身滚动，杜绝下半部分不可达。 */
+:root { --plan-panel-offset: 168px; } /* 顶部占用(≈107) + .main 底部内边距(48) + 余量 */
+.plan-form-wrap, .plan-list-wrap {
+  max-height: calc(100vh - var(--plan-panel-offset));
+  max-height: calc(100dvh - var(--plan-panel-offset)); /* 移动端浏览器工具栏收放时更稳 */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;            /* 不产生横向滚动 */
+  overscroll-behavior: contain;  /* 滚到边界不带动整页滚动 */
+}
 .plan-form-wrap { position: sticky; top: 22px; }
+/* 卡头 + 筛选条作为一个整体吸顶（标题/计数/模板/导入/筛选按钮滚动时始终可点）：
+   横向撑满以遮住卡片内边距；上半部分沿用卡片圆角，与卡体连成一体。
+   纵向只用 padding 撑开间距，不加 margin，避免透明缝隙露出滚过的内容。 */
+/* 卡片上内边距归零并移入吸顶区：sticky 会被「父级内容盒」夹住，
+   若保留卡片 20px 上内边距，吸顶区最多只能贴到内容盒顶端，顶部永远留一条 20px 缝。 */
+.plan-list-wrap { padding-top: 0; }
+.plan-list-wrap > .plan-list-top {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--card-bg);
+  /* 横向负边距撑满（遮住左右内边距）；纵向间距一律用 padding，
+     不能用 margin —— margin 在背景盒之外，会露出透明缝隙让滚过的内容透出来。 */
+  margin: 0 -22px;
+  padding: 20px 22px 16px;
+  /* 与卡片上边同圆角；卡片 overflow 会按圆角裁切，故无需再减边框厚度 */
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
 
 .plan-item {
   border: 1px solid var(--line-item);
@@ -1060,7 +1091,8 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 
 @media (max-width: 980px) {
   .plan-layout { grid-template-columns: 1fr; }
-  .plan-form-wrap { position: static; }
+  /* 单列堆叠时表单在列表上方，回归文档流，不再封顶/内部滚动 */
+  .plan-form-wrap { position: static; max-height: none; overflow: visible; }
   .grid-3 { grid-template-columns: 1fr; }
 }
 
@@ -1068,6 +1100,12 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
   .sidebar { display: none; }
   .tabbar { display: flex; }
   .main { padding: 16px 14px calc(84px + env(safe-area-inset-bottom)); }
+  /* 小屏顶部占用更大（品牌行 + 纵向 topbar + 底部安全区），单独调偏移 */
+  :root { --plan-panel-offset: 216px; }
+  .plan-list-wrap { min-height: 320px; }
+  /* 移动端 .card 内边距为 16px：同步清零上内边距，并修正吸顶区撑满量 */
+  .plan-list-wrap { padding-top: 0; }
+  .plan-list-wrap > .plan-list-top { margin: 0 -16px; padding: 16px 16px 16px; }
   .topbar { flex-direction: column; align-items: stretch; gap: 12px; }
   .topbar h1 { font-size: 20px; }
   .grid-2 { grid-template-columns: 1fr; }
@@ -4029,18 +4067,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       desc: filter === 'all' ? '在左侧填写科目与任务，开始你的第一条计划。' : '换个筛选条件看看。'
     });
 
-    return '<div class="card-head"><div class="card-title"><span class="dot sec"></span>计划列表</div>' +
+    /* 卡头与筛选条包进 .plan-list-top：随列表滚动一起吸顶，
+       间距由该容器的 padding-bottom 提供（替代 chip-row 的 mb-16），保证背景完整覆盖。 */
+    return '<div class="plan-list-top">' +
+      '<div class="card-head"><div class="card-title"><span class="dot sec"></span>计划列表</div>' +
       '<div class="card-head-right"><span class="card-desc">' + list.length + ' 条</span>' +
       '<button class="btn btn-sm" data-act="plan-tpl-download">' + ic('ic-download', 14) + '模板</button>' +
       '<button class="btn btn-sm" data-act="plan-import">' + ic('ic-plus', 14) + '导入</button>' +
       '</div></div>' +
-      '<div class="chip-row mb-16">' + chips + '</div>' + body;
+      '<div class="chip-row">' + chips + '</div>' +
+      '</div>' + body;
   }
 
   function renderPlan(root) {
     root.innerHTML = '<div class="plan-layout">' +
       '<div class="plan-form-wrap" id="plan-form-wrap">' + planFormHTML() + '</div>' +
-      '<div class="card rise" id="plan-list-wrap" style="--d:.08s">' + planListHTML() + '</div>' +
+      '<div class="card rise plan-list-wrap" id="plan-list-wrap" style="--d:.08s">' + planListHTML() + '</div>' +
       '</div>';
   }
   function refreshPlanForm() {
