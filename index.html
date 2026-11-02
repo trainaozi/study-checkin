@@ -2909,11 +2909,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     store.records.forEach(function (r) { set[r.subject] = 1; });
     return Object.keys(set).sort();
   }
+  /* 星期区间标签：连续 3 天以上折叠成「周一~周六」，零散的保留「周一·周三·周五」，
+     多段用「、」连接（如「周一~周三、周五·周六」）。周计划导入合并后靠它读成区间。 */
+  function weekdayLabel(days) {
+    var posOf = function (w) { return (w + 6) % 7; }; // 周一=0 … 周日=6
+    var p = (days || []).slice().sort(function (a, b) { return posOf(a) - posOf(b); });
+    if (!p.length) return '';
+    var runs = [], cur = [p[0]];
+    for (var i = 1; i < p.length; i++) {
+      if (posOf(p[i]) === posOf(cur[cur.length - 1]) + 1) cur.push(p[i]);
+      else { runs.push(cur); cur = [p[i]]; }
+    }
+    runs.push(cur);
+    return runs.map(function (r) {
+      return r.length >= 3 ? (WEEK_CN[r[0]] + '~' + WEEK_CN[r[r.length - 1]])
+        : r.map(function (d) { return WEEK_CN[d]; }).join('·');
+    }).join('·'); // 与原格式保持一致：每周一~六、每周一·三·五
+  }
+
   function repeatLabel(plan) {
     var t = plan.repeat.type;
     if (t === 'daily') return '每天';
     if (t === 'weekly') {
-      return '每周' + plan.repeat.weekdays.map(function (d) { return WEEK_CN[d]; }).join('·');
+      return '每周' + weekdayLabel(plan.repeat.weekdays);
     }
     return '单次 ' + fmtDateCN(plan.repeat.date, false);
   }
@@ -3401,7 +3419,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     planAppliesTo: planAppliesTo, plansOfDay: plansOfDay, planById: planById,
     recordsOfDay: recordsOfDay, recordsOfTask: recordsOfTask, durationOfTask: durationOfTask,
     isTaskDone: isTaskDone, totalDuration: totalDuration, subjectsAll: subjectsAll,
-    repeatLabel: repeatLabel, streakDays: streakDays, weekStart: weekStart,
+    repeatLabel: repeatLabel, weekdayLabel: weekdayLabel, streakDays: streakDays, weekStart: weekStart,
     // 章节库与结构化今日项目（v3）
     chaptersAll: chaptersAll, chapterById: chapterById, findSection: findSection,
     addChapter: addChapter, deleteChapter: deleteChapter, chaptersProgress: chaptersProgress,
@@ -4054,8 +4072,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ['3. 同一任务若每天都有，请在对应日期的格子都填上。', ''],
       ['4. 如需指定科目，可在任务前加「科目·」分隔，例如「数学·高数新课」；不写的科目默认「未分类」。', ''],
       ['5. 第 2 行为示例数据，请整行删除后再填写并导入；留空的格子不会被导入。', ''],
-      ['6. 重复的计划（科目+任务+时间+星期 完全相同）会自动跳过，不重复添加。', ''],
-      ['7. 导入后可在「每日计划」页编辑、删除每条计划。', '']
+      ['6. 合并规则：同一任务（科目+任务+起止时间完全相同）在多个星期出现时，若这些星期连续或等间隔', ''],
+      ['   （如周一~周六、周六~周一、周一/三/五），会合并为一条计划，显示为「每周一~周六」。', ''],
+      ['   任务名称或内嵌数量不同（如「背新词① 60个」与「复习旧词②120个」）、时间不同，均不会合并。', ''],
+      ['   星期零散无规律（如只有周一和周四）也不合并，按星期拆成多条。', ''],
+      ['7. 库中已存在的计划（科目+任务+时间+星期 完全相同）会自动跳过，不重复添加。', ''],
+      ['8. 导入后可在「每日计划」页编辑、删除每条计划。', '']
     ];
     var ws2 = window.XLSX.utils.aoa_to_sheet(helpRows);
     ws2['!cols'] = [{ wch: 72 }, { wch: 4 }];
@@ -4146,6 +4168,61 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { plans: plans, errors: errors, skippedExample: skippedExample };
   }
 
+  /* ---------- 同任务合并：把「同一任务在多个星期出现」聚成一条计划 ----------
+     比较字段：科目 + 任务（含名称与内嵌数量，如「背新词① 60个」）+ 开始时间 + 结束时间。
+     忽略字段：星期/日期（正是要合并的维度）、自增 id、note、createdAt。
+     合并条件：星期集合 ≥2 天，且构成「连续区间」（周一~周六，支持跨周末环绕）或
+     「等间隔规律」（周一/三/五，步长一致且 ≥3 天）。否则按星期拆成多条，不做合并。 */
+  function weekdayPos(w) { return (w + 6) % 7; } // 周一=0 … 周日=6
+  function isWeekRun(days) {
+    if (days.length <= 1) return false;
+    var s = {}, i, k;
+    for (i = 0; i < days.length; i++) s[weekdayPos(days[i])] = 1;
+    for (i = 0; i < days.length; i++) {
+      var start = weekdayPos(days[i]), ok = true;
+      for (k = 0; k < days.length; k++) { if (!s[(start + k) % 7]) { ok = false; break; } }
+      if (ok) return true; // 从某天起连续 days.length 天都在集合内
+    }
+    return false;
+  }
+  function isWeekRegular(days) {
+    if (days.length < 3) return false;
+    var p = days.map(weekdayPos).sort(function (a, b) { return a - b; });
+    var gap = p[1] - p[0], i;
+    if (gap < 1 || gap > 3) return false;
+    for (i = 1; i < p.length; i++) { if (p[i] - p[i - 1] !== gap) return false; }
+    return true;
+  }
+
+  function mergePlanCandidates(list) {
+    var keys = [], groups = {};
+    list.forEach(function (p) {
+      var k = p.subject + '|' + p.task + '|' + p.startTime + '|' + p.endTime;
+      if (!groups[k]) {
+        groups[k] = { subject: p.subject, task: p.task, startTime: p.startTime, endTime: p.endTime, days: [], seq: keys.length };
+        keys.push(k);
+      }
+      if (groups[k].days.indexOf(p.weekday) < 0) groups[k].days.push(p.weekday);
+    });
+    var out = [], mergedGroups = 0;
+    keys.forEach(function (k) {
+      var g = groups[k];
+      // 按「周一→周日」排序，保证区间展示与 repeatLabel 一致
+      var days = g.days.slice().sort(function (a, b) { return weekdayPos(a) - weekdayPos(b); });
+      var canMerge = days.length > 1 && (isWeekRun(days) || isWeekRegular(days));
+      if (canMerge) {
+        mergedGroups++;
+        out.push({ subject: g.subject, task: g.task, startTime: g.startTime, endTime: g.endTime, weekdays: days, seq: g.seq });
+      } else {
+        days.forEach(function (w, i) {
+          out.push({ subject: g.subject, task: g.task, startTime: g.startTime, endTime: g.endTime, weekdays: [w], seq: g.seq + i * 0.001 });
+        });
+      }
+    });
+    out.sort(function (a, b) { return a.seq - b.seq; }); // 保持模板行/列的原有先后顺序
+    return { list: out, mergedGroups: mergedGroups };
+  }
+
   function existingWeeklyKeys() {
     var set = {};
     S.plans.forEach(function (p) {
@@ -4175,21 +4252,34 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         if (!res.plans.length && !res.errors.length) {
           A.toast('未读取到任何计划，请检查模板（首行应为：时间/周一..周日）', 'warn');
         } else {
-          var batch = {}, exKeys = existingWeeklyKeys(), added = 0, dup = 0;
-          res.plans.forEach(function (p) {
-            var key = p.subject + '|' + p.task + '|' + padTime(p.startTime) + '|' + padTime(p.endTime) + '|' + p.weekday;
-            if (batch[key] || exKeys[key]) { dup++; return; }
-            batch[key] = 1;
+          var mg = mergePlanCandidates(res.plans);
+          var batch = {}, exKeys = existingWeeklyKeys(), added = 0, dup = 0, base = Date.now();
+          mg.list.forEach(function (m, idx) {
+            var st = padTime(m.startTime), et = padTime(m.endTime);
+            // 本批次已插入 / 库里已存在的星期不再重复，避免与已有计划重叠
+            var days = m.weekdays.filter(function (w) {
+              var k = m.subject + '|' + m.task + '|' + st + '|' + et + '|' + w;
+              return !(batch[k] || exKeys[k]);
+            });
+            dup += m.weekdays.length - days.length;
+            if (!days.length) return;
+            days.forEach(function (w) {
+              batch[m.subject + '|' + m.task + '|' + st + '|' + et + '|' + w] = 1;
+            });
             S.plans.push({
-              id: A.uid('plan'), subject: p.subject, task: p.task,
-              startTime: p.startTime, endTime: p.endTime,
-              repeat: { type: 'weekly', date: A.today(), since: A.today(), weekdays: [p.weekday] },
-              note: '', createdAt: Date.now(), updatedAt: Date.now()
+              id: A.uid('plan'), subject: m.subject, task: m.task,
+              startTime: st, endTime: et,
+              repeat: { type: 'weekly', date: A.today(), since: A.today(), weekdays: days },
+              // createdAt 随导入顺序递减：列表按「时间 → createdAt 降序」排，行序得以保持
+              note: '', createdAt: base - idx, updatedAt: Date.now()
             });
             added++;
           });
           if (added) A.save();
-          showPlanImportResult({ added: added, dup: dup, errors: res.errors, skippedExample: res.skippedExample });
+          showPlanImportResult({
+            added: added, dup: dup, errors: res.errors,
+            skippedExample: res.skippedExample, mergedGroups: mg.mergedGroups
+          });
           if (added || dup) { refreshPlanList(); A.renderNav(); }
         }
       } catch (err) {
@@ -4202,7 +4292,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function showPlanImportResult(r) {
     var msg = '成功添加 <b>' + r.added + '</b> 条计划' +
-      (r.dup ? '，跳过重复 <b>' + r.dup + '</b> 条' : '') +
+      (r.mergedGroups ? '（其中合并 <b>' + r.mergedGroups + '</b> 组同任务为区间计划）' : '') +
+      (r.dup ? '，跳过重复 <b>' + r.dup + '</b> 个星期' : '') +
       (r.skippedExample ? '，跳过示例 <b>' + r.skippedExample + '</b> 行' : '') +
       (r.errors.length ? '，<b style="color:var(--warn)">' + r.errors.length + '</b> 行有误' : '') + '。';
     var errHtml = r.errors.length
