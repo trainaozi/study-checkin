@@ -3057,6 +3057,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     return '单次 ' + fmtDateCN(plan.repeat.date, false);
   }
+  /* 计划列表的时间序（不修改原数组，返回新数组）：
+       开始时间 → 结束时间 → 生效范围（每天 / 每周按首个星期 / 单次按日期）→ 学科 → 新建在前。
+     同一时刻有多条计划时（典型：周课表导入后同一时段不同星期），仍能给出稳定、可预期的次序。 */
+  function planRepeatOrderKey(plan) {
+    var r = (plan && plan.repeat) || {};
+    if (r.type === 'daily') return '0';
+    if (r.type === 'weekly') {
+      var w = (r.weekdays || []).slice().sort(function (a, b) { return ((a + 6) % 7) - ((b + 6) % 7); });
+      // a~g 对应周一~周日，保证字典序 = 星期先后
+      return '1' + (w.length ? String.fromCharCode(97 + ((w[0] + 6) % 7)) : 'z');
+    }
+    return '2' + (r.date || '');
+  }
+  function sortPlansByTime(list) {
+    return (list || []).slice().sort(function (a, b) {
+      var d = timeToMin(a.startTime) - timeToMin(b.startTime);
+      if (d) return d;
+      d = timeToMin(a.endTime) - timeToMin(b.endTime);
+      if (d) return d;
+      var ka = planRepeatOrderKey(a), kb = planRepeatOrderKey(b);
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      d = String(a.subject || '').localeCompare(String(b.subject || ''), 'zh-Hans-CN');
+      if (d) return d;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  }
   function streakDays() {
     var set = {};
     store.records.forEach(function (r) { set[r.date] = 1; });
@@ -3542,6 +3568,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     recordsOfDay: recordsOfDay, recordsOfTask: recordsOfTask, durationOfTask: durationOfTask,
     isTaskDone: isTaskDone, totalDuration: totalDuration, subjectsAll: subjectsAll,
     repeatLabel: repeatLabel, weekdayLabel: weekdayLabel, streakDays: streakDays, weekStart: weekStart,
+    sortPlansByTime: sortPlansByTime, planRepeatOrderKey: planRepeatOrderKey,
     // 章节库与结构化今日项目（v3）
     chaptersAll: chaptersAll, chapterById: chapterById, findSection: findSection,
     addChapter: addChapter, deleteChapter: deleteChapter, chaptersProgress: chaptersProgress,
@@ -5055,10 +5082,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<div class="card rise mt-16" style="--d:.2s">' +
       '<div class="card-head"><div class="card-title"><span class="dot acc"></span>云同步 · 跨设备备份</div>' +
       '<span class="card-desc" id="sync-card-status">—</span></div>' +
-      '<div class="hint">将打卡数据加密后备份到你的 GitHub 私有 Gist，换设备 / 清缓存也能恢复。需要 GitHub 个人访问令牌（仅需 gist 权限）。</div>' +
+      '<div class="hint">将打卡数据加密后备份到你的 GitHub 私有 Gist，换设备 / 清缓存也能恢复。需要 GitHub 个人访问令牌（仅需 gist 权限）。' +
+      '开启自动同步后每 5 分钟自动上传一次本地快照；从云端下载需手动触发。</div>' +
       '<div class="chip-row">' +
       '<button class="btn btn-sm btn-primary" data-act="sync-open">' + ic('ic-cloud', 14) + '打开云同步</button>' +
-      '<button class="btn btn-sm" data-act="sync-now" id="sync-card-btn">立即同步</button>' +
+      '<button class="btn btn-sm" data-act="sync-upload" id="sync-card-btn">上传到云端</button>' +
+      '<button class="btn btn-sm" data-act="sync-download">从云端下载</button>' +
       '</div></div>';
     refreshHistoryBody();
   }
@@ -5575,7 +5604,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return '<div class="hint">还没有学习计划。请先在「计划」页添加计划，再回来关联。</div>' +
         '<div class="modal-foot"><button type="button" class="btn" data-act="modal-close">关闭</button></div>';
     }
-    var rows = plans.map(function (p) {
+    /* 按时间从早到晚排列（同一时刻再按结束时间、生效星期、学科排），
+       与计划页口径一致 —— 原顺序是录入顺序，课时表导入后完全看不出先后。 */
+    var rows = A.sortPlansByTime(plans).map(function (p) {
       var checked = ui.etaAssocSel[p.id] ? ' checked' : '';
       return '<label class="eta-plan-row">' +
         '<input type="checkbox" data-eta-plan="' + esc(p.id) + '"' + checked + '>' +
@@ -5584,7 +5615,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<span class="eta-plan-rep">' + esc(A.repeatLabel(p)) + ' · ' + esc(p.startTime) + '–' + esc(p.endTime) + '</span>' +
       '</label>';
     }).join('');
-    return '<div class="hint" style="margin-bottom:10px">勾选与「' + esc(label) + '」对应的计划（可多选）。保存后按这些计划每日投入时长推算其预计完成日期。未勾选则沿用上级关联或按科目自动匹配。</div>' +
+    return '<div class="hint" style="margin-bottom:10px">勾选与「' + esc(label) + '」对应的计划（可多选）。保存后按这些计划每日投入时长推算其预计完成日期。未勾选则沿用上级关联或按科目自动匹配。列表按开始时间从早到晚排列。</div>' +
       '<div class="eta-plan-list">' + rows + '</div>' +
       '<div class="modal-foot">' +
         '<button type="button" class="btn" data-act="modal-close">取消</button>' +
@@ -6319,8 +6350,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
               A.renderNav();
               if (A.navigate) A.navigate();
               A.toast('备份已恢复', 'ok');
-              // 已连接云同步：以本地恢复数据为准，强制覆盖云端（清除云端墓碑），
-              // 确保后续自动同步 / 解锁拉取时，恢复的数据不会被云端旧墓碑再次删除。
+              // 已连接云同步：以本地恢复数据为准，立即强制覆盖云端（清除云端墓碑），
+              // 确保后续定时上传 / 解锁拉取时，恢复的数据不会被云端旧墓碑再次删除。
               if (window.Sync && window.Sync.isConnected && window.Sync.isConnected()) {
                 window.Sync.push({ force: true })
                   .then(function () { A.toast('已同步（恢复数据已覆盖云端）', 'ok'); })
@@ -6349,8 +6380,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // 仅清空内存中的全部数据并重渲染界面，不再刷新页面。
       // 旧实现在移除数据后会 location.reload()，刷新会使云同步模块进入“锁定”状态，
       // 用户解锁后又把云端旧数据拉回，导致“一键清空”失效。
-      // 注意：此处不要调用 A.save()，否则会自动触发云同步 push()，
-      // 而 push() 会把“本地空状态”与“云端旧数据”合并、再把旧数据写回，使清空失效。
+      // 注意：此处不调用 A.save() —— 本地存储已整体移除，重新落盘只会写回一份默认空结构。
+      // 上传现在以本机快照为权威且不再合并云端，因此本地写入也不再触发同步。
       if (A.clearTimer) A.clearTimer();
       S.plans = [];
       S.records = [];
@@ -6368,9 +6399,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       A.renderNav();
       if (A.navigate) A.navigate();
       A.toast('数据已清空', 'ok');
-      // 若已连接云同步：必须把“空状态”强制覆盖到云端（force 覆盖，不做合并）。
-      // 否则云端仍保留旧数据，后续任意一次自动同步（push 会将本地空 + 云端旧合并）
-      // 都会把已清空的数据再次复活，导致“一键清空”失效。
+      // 若已连接云同步：必须立刻把“空状态”强制覆盖到云端（force 覆盖，不做合并）。
+      // 自动同步已收敛为每 5 分钟上传一次，若不在此处立即覆盖，这 5 分钟内
+      // 用户手动下载或另一台设备同步，都会把云端旧数据重新捞回来。
       if (window.Sync && window.Sync.isConnected && window.Sync.isConnected()) {
         A._restoring = true;
         window.Sync.push({ force: true })
@@ -6516,18 +6547,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SCHEMA = 1;
   var CLIENT_TAG = 'study-checkin-web';
   var PBKDF2_ITER = 200000;
-  /* 单次 GitHub 请求超时（毫秒）。fetch 无内置超时，若网络挂起会让
-     状态永远停在「同步中」，并因 onLocalChange 的 syncing 判断而彻底失去自动同步。 */
+  /* 单次 GitHub 请求超时（毫秒）。fetch 无内置超时，若网络挂起会让状态永远停在「同步中」。 */
   var REQ_TIMEOUT = 30000;
+  /* 自动同步周期：连接且开启「自动同步」后，每 5 分钟上传一次本地快照。
+     这是全应用唯一的自动同步触发点；本地写入（A.save）不再触发同步。 */
+  var AUTO_INTERVAL = 5 * 60 * 1000;
 
   /* ----------------------------------------------------- 内部状态 */
   var session = null; // { token, gistId, autoSync, pass }
   var origSave = A.save;
   var state = { status: 'idle', message: '', lastSyncAt: 0, lastPullAt: 0, lastError: '' };
-  var autoTimer = null;
-  var wrapped = false;
-  var pendingPush = false; // 同步进行中产生的本地改动，等同步结束后补传
-  var inFlight = null;     // 正在进行的同步任务，避免并发 push 造成 rev 竞争
+  var autoIntervalId = null; // 5 分钟定时器句柄
+  var inFlight = null;       // 正在进行的同步任务，避免并发 push 造成 rev 竞争
 
   /* ============================================================ 加密 */
   function bufToB64(buf) {
@@ -6645,7 +6676,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if (!e || !e.id) return;
       var cur = map[e.id];
       if (!cur) map[e.id] = e;
-      else if (entStamp(e) >= entStamp(cur)) map[e.id] = e;
+      /* 同戳时必须保留 a（本地）：打卡记录只有 createdAt、没有 updatedAt，
+         结束打卡 / 编辑记录后时间戳不变，若用 >= 让 b（云端）胜出，
+         云端未打卡的旧版本就会把本地最新状态覆盖回去。
+         仅当 b 的时间戳严格更新（另一台设备确实改过）才取云端。 */
+      else if (entStamp(e) > entStamp(cur)) map[e.id] = e;
     });
     return Object.keys(map).filter(function (k) {
       var ts = Math.max(ta[k] || 0, tb[k] || 0);
@@ -6969,13 +7004,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   /* ============================================================ 同步操作 */
   /** 互斥包装：同一时刻只允许一个同步任务在飞。
-      push 与 pull 都会「读云端 → 合并 → 写云端」，并发执行时后写者会覆盖前写者的合并结果，
-      表现为随机丢记录（rev 竞争）。这里让后来的调用直接复用进行中的任务。 */
+      push 与 pull 都会读云端 / 写云端，并发执行时后写者会覆盖前写者的结果，
+      表现为 rev 竞争或随机丢记录。这里让后来的调用直接复用进行中的任务。 */
   function exclusive(task) {
     if (inFlight) return inFlight;
     inFlight = task().then(
-      function (v) { inFlight = null; flushPending(); return v; },
-      function (e) { inFlight = null; flushPending(); throw e; });
+      function (v) { inFlight = null; return v; },
+      function (e) { inFlight = null; throw e; });
     return inFlight;
   }
   function push(opts) {
@@ -6998,39 +7033,40 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     setState('syncing', '正在上传…');
     return ghFetch('/gists/' + session.gistId).then(function (gist) {
       var file = gist.files && gist.files[GIST_FILENAME];
-      var remoteRev = 0, remoteData = null;
+      var remoteRev = 0;
       if (file && file.content) {
-        try { var p = JSON.parse(file.content); remoteRev = p.rev || 0; remoteData = p.data || null; }
-        catch (e) { remoteData = null; }
+        try { var p = JSON.parse(file.content); remoteRev = p.rev || 0; } catch (e) { remoteRev = 0; }
       }
-      var base = cloneStore(A.store);
-      var merged;
-      if (opts.force) {
-        // 恢复备份 / 整体覆盖：以本地为权威快照，直接覆盖云端（清除云端墓碑），
-        // 不再与远端合并，避免远端墓碑把刚恢复的数据再次删除。
-        merged = base;
-      } else {
-        merged = remoteData ? mergeStore(base, remoteData) : base;
-      }
-      var baseRev = Math.max(remoteRev, (A.store.meta.sync ? A.store.meta.sync.rev : 0));
-      var newRev = baseRev + 1;
-      merged.meta = merged.meta || {};
-      merged.meta.sync = {
+      /* 上传以「本机当前快照」为唯一权威，绝不与云端旧数据合并、绝不回写本机。
+         旧实现 mergeStore(本地, 云端) 后 applyStore，等价于把云端「未打卡 / 未删除」
+         的旧状态下载回本机，正是结束打卡与删除记录后状态回退的根因：
+           · 结束打卡：云端旧的 running timer / 未打卡 days 被并集或 mergeTimer 复活；
+           · 删除记录：撤销窗口 5s 内墓碑尚未写入，2.5s 的自动 push 已从云端
+             把该记录合并回本地，删除被撤销。
+         force（恢复备份 / 清空）与常规上传现在内容一致，仍保留其独占执行语义，
+         避免复用进行中的普通同步导致快照过期。 */
+      var meta = A.store.meta || {};
+      var prev = meta.sync || {};
+      var newRev = Math.max(remoteRev, Number(prev.rev) || 0) + 1;
+      var syncMeta = {
         rev: newRev,
         lastSyncAt: Date.now(),
-        lastPullAt: (A.store.meta.sync ? A.store.meta.sync.lastPullAt : 0)
+        lastPullAt: Number(prev.lastPullAt) || 0
       };
+      var base = cloneStore(A.store);
+      base.meta = base.meta || {};
+      base.meta.sync = syncMeta;
       var payload = {
         schema: SCHEMA, rev: newRev, updatedAt: Date.now(), client: CLIENT_TAG,
         data: {
-          version: merged.version, createdAt: merged.createdAt, updatedAt: merged.updatedAt,
-          plans: merged.plans, chapters: merged.chapters, days: merged.days, records: merged.records, timer: merged.timer,
-          nodePlans: merged.nodePlans || {},
-          tombstones: merged.tombstones || { plans: {}, records: {}, chapters: {} },
+          version: base.version, createdAt: base.createdAt, updatedAt: base.updatedAt,
+          plans: base.plans, chapters: base.chapters, days: base.days, records: base.records, timer: base.timer,
+          nodePlans: base.nodePlans || {},
+          tombstones: base.tombstones || { plans: {}, records: {}, chapters: {} },
           meta: {
-            lastOpen: (merged.meta && merged.meta.lastOpen) || A.today(),
-            notice: (merged.meta && merged.meta.notice) || '',
-            sync: merged.meta.sync
+            lastOpen: (base.meta && base.meta.lastOpen) || A.today(),
+            notice: (base.meta && base.meta.notice) || '',
+            sync: syncMeta
           }
         }
       };
@@ -7038,9 +7074,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         method: 'PATCH',
         body: JSON.stringify({ files: createFiles(payload) })
       }).then(function () {
-        applyStore(merged);
-        refreshUI();
-        setState('ok', '已同步', { lastSyncAt: Date.now() });
+        // 只提交同步元数据并落盘；业务数据保持本地原样（上传永远不改变本机状态）
+        A.store.meta = A.store.meta || {};
+        A.store.meta.sync = syncMeta;
+        origSave();
+        setState('ok', '已上传到云端', { lastSyncAt: syncMeta.lastSyncAt });
+        return { uploaded: true, rev: newRev };
       });
     });
   }
@@ -7067,41 +7106,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       refreshUI();
       var after = snapshotCount(A.store);
       var diff = after - before;
-      setState('ok', '已合并云端（' + (diff >= 0 ? '+' : '') + diff + ' 项）', { lastPullAt: Date.now() });
+      setState('ok', '已从云端下载并合并（' + (diff >= 0 ? '+' : '') + diff + ' 项）', { lastPullAt: Date.now() });
       return { changed: diff !== 0 };
     });
   }
 
-  /* ============================================================ 自动同步 */
-  function wrapSave() {
-    if (wrapped) return; wrapped = true;
-    origSave = A.save;
-    A.save = function () {
-      var r = origSave.apply(A, arguments);
-      onLocalChange();
-      return r;
-    };
+  /* ============================================================ 自动同步
+     策略（收敛后）：连接且开启「自动同步」时，仅每 5 分钟自动上传一次本地快照。
+       · 本地写入（A.save）不再触发同步 —— 结束打卡 / 删除记录 / 勾选项目等
+         不再有 2.5s 后的隐式上传，撤销窗口内也不会把云端旧数据合并回本机。
+       · 不监听 visibilitychange / focus / online / 启动等事件，不新增触发点。
+       · 手动「上传到云端」与定时器调用同一个 push()，两者结果完全一致。
+       · 从云端下载只能由用户手动触发，自动同步永不执行下载。 */
+  function autoTick() {
+    if (!session || !session.autoSync) return Promise.resolve(false);
+    if (A._restoring) return Promise.resolve(false);
+    if (state.status === 'syncing') return Promise.resolve(false);
+    return push().then(function () { return true; },
+      function (e) { reportError(e); return false; });
   }
-  function onLocalChange() {
-    if (A._restoring) return; // 恢复备份期间不触发自动合并上传，避免云端旧墓碑把恢复的数据再次删除
-    if (!session || !session.autoSync) return;
-    clearTimeout(autoTimer);
-    /* 同步进行中不丢弃本次改动，而是记下 pending：旧实现直接 return，
-       导致「同步耗时 > 2.5s」时，同步窗口内的编辑永远不会上传云端。 */
-    if (state.status === 'syncing') { pendingPush = true; return; }
-    autoTimer = setTimeout(function () {
-      push().then(function () { }).catch(function (e) { reportError(e); });
-    }, 2500);
-  }
-  /** 同步结束后检查是否有同步窗口内产生的改动，有则补一次上传 */
-  function flushPending() {
-    if (!pendingPush) return;
-    pendingPush = false;
-    if (!session || !session.autoSync || A._restoring) return;
-    clearTimeout(autoTimer);
-    autoTimer = setTimeout(function () {
-      push().then(function () { }).catch(function (e) { reportError(e); });
-    }, 800);
+  function startAuto() {
+    if (autoIntervalId) return;
+    autoIntervalId = setInterval(function () { autoTick(); }, AUTO_INTERVAL);
   }
 
   /* ============================================================ UI：状态机 */
@@ -7167,7 +7193,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var btn = A.$('#sync-card-btn');
     if (btn) {
       btn.disabled = !session;
-      btn.textContent = session ? '立即同步' : '需先连接';
+      btn.textContent = session ? '上传到云端' : '需先连接';
     }
   }
   function refreshUI() {
@@ -7209,7 +7235,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<div class="hint">同一 GitHub 账号下会<b>自动复用</b>已有的学习打卡备份 Gist（多个旧备份会自动合并），因此电脑和手机用同一个令牌即可自动同步，无需手动填写。仅当你想指向某个特定备份时才填这里。</div></div>' +
         '<div class="form-row" style="flex-direction:row;align-items:center;gap:10px">' +
         '<label class="switch on" data-act="sync-toggle-auto" style="margin:0">自动同步</label>' +
-        '<span class="hint" style="margin:0">开启后，本地改动会自动上传到云端</span></div>' +
+        '<span class="hint" style="margin:0">开启后每 5 分钟自动上传一次；其余时候手动上传/下载</span></div>' +
         '<div class="modal-foot">' +
         '<button type="button" class="btn" data-act="modal-close">取消</button>' +
         '<button type="submit" class="btn btn-primary">保存并连接</button></div>' +
@@ -7251,13 +7277,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         (state.lastError ? '<div class="hint" style="color:var(--secondary-ink)">最近错误：' + A.esc(state.lastError) + '</div>' : '') +
         '<div class="form-row" style="flex-direction:row;align-items:center;gap:10px;margin-top:8px">' +
         '<label class="switch ' + (session.autoSync ? 'on' : '') + '" data-act="sync-toggle-auto" style="margin:0">自动同步</label>' +
-        '<span class="hint" style="margin:0">' + (session.autoSync ? '已开启：本地改动自动上传' : '已关闭：仅手动同步') + '</span></div>' +
+        '<span class="hint" style="margin:0">' + (session.autoSync ? '已开启：每 5 分钟自动上传一次本地快照' : '已关闭：仅手动上传 / 下载') + '</span></div>' +
         '<div class="chip-row" style="margin-top:14px">' +
-        '<button class="btn btn-sm btn-primary" data-act="sync-now">立即同步</button>' +
+        '<button class="btn btn-sm btn-primary" data-act="sync-upload">上传到云端</button>' +
+        '<button class="btn btn-sm" data-act="sync-download">从云端下载</button>' +
         '<button class="btn btn-sm" data-act="sync-change-pass">更改口令</button>' +
         '<button class="btn btn-sm" data-act="sync-lock">锁定</button>' +
         '<button class="btn btn-sm btn-danger" data-act="sync-disconnect">断开并清除</button>' +
-        '</div>',
+        '</div>' +
+        '<div class="hint" style="margin-top:10px">上传：以本机数据覆盖云端备份，不会改动本机。' +
+        '下载：把云端数据合并到本机，会改动本机，请自行选择时机。' +
+        '自动同步只执行上传，不会把云端旧版本拉回来。</div>',
       maskClose: true
     });
   }
@@ -7304,6 +7334,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       });
     }
     p.then(function () { return persistSession(); })
+      // 上传已改为「本机快照为权威」，连接时必须先把云端已有备份合并进来，
+      // 否则新设备 / 已有备份账号会用本机（可能为空的）数据覆盖云端历史。
+      .then(function () { return pull(); })
       .then(function () { return push(); })
       .then(function () { A.closeModal(); A.toast('云同步已连接', 'ok'); refreshAll(); })
       .catch(function (e) { reportError(e); A.toast('连接失败：' + (e.message || e), 'warn'); });
@@ -7396,11 +7429,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if (A.$('.modal-mask')) openPanel(); else updateCard();
     });
   };
-  A.ACTIONS['sync-now'] = function () {
+  A.ACTIONS['sync-upload'] = function () {
     if (!session) { openPanel(); return; }
-    push().then(function () { A.toast('已同步', 'ok'); if (A.$('.modal-mask')) openPanel(); })
-      .catch(function (e) { A.toast('同步失败：' + (e.message || e), 'warn'); });
+    push().then(function () { A.toast('已上传到云端', 'ok'); if (A.$('.modal-mask')) openPanel(); })
+      .catch(function (e) { A.toast('上传失败：' + (e.message || e), 'warn'); });
   };
+  A.ACTIONS['sync-download'] = function () {
+    if (!session) { openPanel(); return; }
+    A.confirmModal({
+      title: '从云端下载？', okText: '下载并合并', danger: false,
+      sub: '云端备份会合并到本机，可能改变本机当前状态。请自行确认下载时机。'
+    }, function () {
+      pull().then(function (r) {
+        A.toast(r && r.changed ? '已合并云端数据' : '已检查云端，无新增内容', 'ok');
+        refreshAll();
+        if (A.$('.modal-mask')) openPanel();
+      }).catch(function (e) { A.toast('下载失败：' + (e.message || e), 'warn'); });
+    });
+  };
+  /* 兼容旧入口：历史页卡片 / 旧链接的「立即同步」等价于手动上传 */
+  A.ACTIONS['sync-now'] = A.ACTIONS['sync-upload'];
 
   /* ============================================================ 启动 */
   function init() {
@@ -7409,8 +7457,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if (hasVault()) { state.status = 'locked'; state.message = '已加密'; }
       else { state.status = 'idle'; state.message = '未连接'; }
 
-      // 包裹 save，实现自动同步
-      wrapSave();
+      // 启动唯一的自动同步触发点：每 5 分钟一次（未连接/关闭时自动空转）
+      startAuto();
 
       // 顶栏状态 pill（renderPageActions 每次导航会重新注入）
       var _origRPA = A.renderPageActions;
@@ -7432,7 +7480,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       loadVault: loadVault, saveVault: saveVault, clearVault: clearVault, hasVault: hasVault,
       setSession: function (s) { session = s; }, getSession: function () { return session; },
       getState: function () { return state; }, ensureMetaSync: ensureMetaSync,
-      setState: setState, push: push, pull: pull
+      setState: setState, push: push, pull: pull,
+      autoTick: autoTick, AUTO_INTERVAL: AUTO_INTERVAL
     }
   };
 
