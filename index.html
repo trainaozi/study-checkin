@@ -959,6 +959,14 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
 
 .plan-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 
+/* ========== 明日规划（提前安排未来某天的学习内容）==========
+   嵌在计划卡内部：标签 + 多行输入 + 保存提示。
+   颜色全部走主题令牌（亮/暗自动跟随），不写裸色值。 */
+.ahead-form { margin-top: 10px; }
+.ahead-form .textarea { min-height: 64px; }
+.ahead-tip { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+.ahead-tip.saved { color: var(--primary-dark); font-weight: 600; }
+
 /* 打卡卡片 */
 .checkin-card { position: relative; }
 .checkin-card.active-timer { border-color: var(--primary); box-shadow: var(--shadow-brand); }
@@ -1686,6 +1694,11 @@ html { scrollbar-color: var(--scrollbar-thumb) transparent; }
     <g id="ic-plan" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8.5 3v3M15.5 3v3"/><path d="M8 13.5h3.5M8 17h6.5"/>
     </g>
+    <!-- 明日规划：日历 + 箭头（表示「提前安排下一天」） -->
+    <g id="ic-calendar" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8.5 3v3M15.5 3v3"/>
+      <path d="M9.5 15.5h5M12.5 12.5l2.5 2.5-2.5 2.5"/>
+    </g>
     <g id="ic-chart" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 20V4"/><path d="M4 20h16"/><path d="M8 17v-5M12.5 17V7.5M17 17v-8"/>
     </g>
@@ -2143,12 +2156,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         return { id: asText(it.id) || uid('mi'), label: lbl, done: !!it.done };
       }).filter(Boolean);
     });
+    /* 明日规划（提前写好次日的安排）：ahead {planId: 文本}
+       与当天的 focus / sel / done / manuals 完全隔离 —— 只做「提前写、次日看」，
+       不参与完成度、勾选与打卡流程。旧数据没有此字段，读取时自动补空，
+       因此无需版本迁移、也不改动既有存储结构。 */
+    var ahead = asObject(d.ahead), aheadClean = {};
+    Object.keys(ahead).forEach(function (k) { aheadClean[k] = asText(ahead[k], 600); });
     return {
       date: key,
       focus: focusClean,
       sel: selClean,
       done: doneClean,
       manuals: manualsClean,
+      ahead: aheadClean,
       createdAt: Number(d.createdAt) || Date.now()
     };
   }
@@ -2549,7 +2569,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   /* --------------------------------------------------- 业务查询与操作 */
   function ensureDay(key) {
-    if (!store.days[key]) store.days[key] = { date: key, focus: {}, sel: {}, done: {}, manuals: {}, createdAt: Date.now() };
+    if (!store.days[key]) store.days[key] = { date: key, focus: {}, sel: {}, done: {}, manuals: {}, ahead: {}, createdAt: Date.now() };
+    else if (!store.days[key].ahead) store.days[key].ahead = {};
     return store.days[key];
   }
   function focusOf(key, planId) {
@@ -2560,6 +2581,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var d = ensureDay(key);
     text = asText(text, 600).trim();
     if (text) d.focus[planId] = text; else delete d.focus[planId];
+    saveStore();
+  }
+
+  /* --------------------------------------------------- 明日规划（提前安排次日）
+     存储位置：days[日期].ahead[计划ID] = 文本。
+     —— 与当天的 focus（今日具体项目）/ sel / done / manuals 四个字段完全隔离：
+        写在 ahead 里的内容不会出现在「今日具体项目」里，也不会被勾选状态影响，
+        更不会改动任何打卡记录。切换日期（今天 ⇄ 明天）只换读取的日期键，
+        各自的内容天然独立留存。 */
+  /** 某日某计划的「明日规划」文本（没有则空串） */
+  function aheadOf(key, planId) {
+    var d = store.days[key];
+    return (d && d.ahead && d.ahead[planId]) ? d.ahead[planId] : '';
+  }
+  /** 写入某日某计划的「明日规划」文本；传空串即删除该项 */
+  function setAhead(key, planId, text) {
+    var d = ensureDay(key);
+    text = asText(text, 600).trim();
+    if (text) d.ahead[planId] = text; else delete d.ahead[planId];
     saveStore();
   }
 
@@ -3387,7 +3427,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     planFilter: 'all',
     historyTab: 'records',
     form: null,
-    filters: { from: '', to: '', subject: '', mastery: '', kw: '' }
+    filters: { from: '', to: '', subject: '', mastery: '', kw: '' },
+    /* 明日规划：aheadMode = 打卡页是否处于「提前安排次日」模式；
+       aheadDate = 当前查看的日期键（默认今天+1，可前后切换）。 */
+    aheadMode: false,
+    aheadDate: ''
   };
 
   function renderNav() {
@@ -3424,6 +3468,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var hash = (location.hash || '').replace(/^#\/?/, '').split('?')[0] || 'home';
     var known = NAV.some(function (n) { return n.key === hash; });
     ui.route = known ? hash : 'home';
+    /* 离开打卡页时先让视图层落盘「明日规划」未保存的内容（防抖窗口内也不能丢），
+       再退出明日规划模式：回到打卡页时看到的是当天，不会停在未来某一天。 */
+    if (ui.route !== 'checkin') {
+      if (App.flushAheadSave) App.flushAheadSave();
+      ui.aheadMode = false;
+      ui.aheadDate = '';
+    }
 
     var nav = currentNav();
     $('#page-title').textContent = nav.title;
@@ -3588,6 +3639,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     daySel: daySel, dayManuals: dayManuals, dayDoneMap: dayDoneMap,
     estMinutesOf: estMinutesOf, itemTotalCount: itemTotalCount, itemDoneCount: itemDoneCount,
     setDayItems: setDayItems, toggleItemDone: toggleItemDone,
+    // 明日规划（提前安排次日，独立于当天打卡数据）
+    aheadOf: aheadOf, setAhead: setAhead,
     // 计时
     timerElapsed: timerElapsed, startTimer: startTimer, pauseTimer: pauseTimer, clearTimer: clearTimer,
     // 主题
@@ -3966,12 +4019,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       「去重」仅在「设置今日项目」弹窗中进行（已完成小节不进入可选列表）。 */
   function todayItemsHTML(key, planId, withCheck, opts) {
     opts = opts || {};
+    // 未来日期的「明日规划」复用本函数时，表头不能写死「今日」
+    var label = opts.label || '今日具体项目';
     var sel = A.daySel(key, planId);
     var manuals = A.dayManuals(key, planId);
     var done = A.dayDoneMap(key, planId);
     var focus = A.focusOf(key, planId);
     if (!sel.length && !manuals.length) {
-      return opts.noHead ? '' : (focus ? '<div class="plan-focus"><span class="fl">今日具体项目：</span>' + esc(focus) + '</div>' : '');
+      return opts.noHead ? '' : (focus ? '<div class="plan-focus"><span class="fl">' + esc(label) + '：</span>' + esc(focus) + '</div>' : '');
     }
     // openSel 仅用于「待完成」计数/预估；展示仍包含已完成（标记 done 即可，不隐藏）
     var openSel = sel.filter(function (sid) { return !A.isSectionDone(sid); });
@@ -3989,7 +4044,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return '<div class="today-items-list">' + rows + '</div>';
     }
     return '<div class="today-items">' +
-      '<div class="today-items-head"><span class="fl">今日具体项目</span>' +
+      '<div class="today-items-head"><span class="fl">' + esc(label) + '</span>' +
       '<span class="today-items-meta">待完成 ' + openSel.length + ' 节 · 预估 ' + estMin + ' 分钟</span></div>' +
       '<div class="today-items-list">' + rows + '</div>' +
       (focus ? '<div class="plan-focus" style="margin-top:6px"><span class="fl">补充：</span>' + esc(focus) + '</div>' : '') +
@@ -4102,7 +4157,159 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }).join('') + '</div></div>';
   }
 
+  /* ================================================================
+     明日规划：提前打开未来某一天的 checkin 界面，为每个项目分别填写规划内容
+     —— 独立于当天打卡：只写 days[日期].ahead[计划ID]，
+        不碰 focus / sel / done / manuals / records，
+        因此不影响今天（及任何一天）的打卡流程与既有数据。
+     ============================================================ */
+  var AHEAD_MIN_OFFSET = 1;    // 最早只能规划明天
+  var AHEAD_MAX_OFFSET = 30;   // 最远可规划 30 天后
+  /* 待落盘的规划内容：按「日期|计划ID」分别暂存，
+     这样同时编辑多个项目时互不覆盖（每个项目独立保存）。 */
+  var aheadPending = {};
+  var aheadSaveTimer = null;
+
+  /* 标题栏随模式切换（明日规划 vs 当天打卡），让用户始终知道自己在哪 */
+  function setPageTitle(title, sub) {
+    var t = $('#page-title'), s = $('#page-sub');
+    if (t) t.textContent = title;
+    if (s) s.textContent = sub;
+  }
+
+  function aheadKeyOf() {
+    var today = A.today();
+    var min = A.shiftDays(today, AHEAD_MIN_OFFSET);
+    var max = A.shiftDays(today, AHEAD_MAX_OFFSET);
+    var key = A.isDateKey(ui.aheadDate) ? ui.aheadDate : min;
+    if (key < min) key = min;
+    if (key > max) key = max;
+    return key;
+  }
+  /** 把某个项目的规划内容写入 days[日期].ahead[计划ID]（与当天打卡数据隔离） */
+  function flushAheadSave() {
+    if (aheadSaveTimer) { clearTimeout(aheadSaveTimer); aheadSaveTimer = null; }
+    var keys = Object.keys(aheadPending);
+    if (!keys.length) return;
+    var batch = aheadPending;
+    aheadPending = {};
+    var touchedDate = '';
+    keys.forEach(function (k) {
+      var it = batch[k];
+      A.setAhead(it.date, it.planId, it.node.value);
+      touchedDate = it.date;
+      var tip = it.node.parentNode ? it.node.parentNode.querySelector('.ahead-tip') : null;
+      if (tip) { tip.textContent = '已保存'; tip.className = 'ahead-tip saved'; }
+    });
+    // 刷新「已填 N 项」计数
+    var cnt = $('#ahead-filled');
+    if (cnt && touchedDate) {
+      var dayPlans = A.plansOfDay(touchedDate);
+      var n = dayPlans.filter(function (p) {
+        return !!A.aheadOf(touchedDate, p.id) || A.itemTotalCount(touchedDate, p.id) > 0;
+      }).length;
+      cnt.textContent = String(n);
+      var bar = $('#ahead-bar-fill');
+      if (bar && dayPlans.length) {
+        bar.style.width = Math.max(2, Math.round(n * 1000 / dayPlans.length) / 10).toFixed(1) + '%';
+      }
+    }
+  }
+  function scheduleAheadSave(node) {
+    var planId = node.getAttribute('data-ahead-plan');
+    var date = node.getAttribute('data-ahead-date');
+    if (!planId || !A.isDateKey(date)) return;
+    aheadPending[date + '|' + planId] = { node: node, date: date, planId: planId };
+    if (aheadSaveTimer) clearTimeout(aheadSaveTimer);
+    aheadSaveTimer = setTimeout(flushAheadSave, 400);
+  }
+
+  function aheadPlanCardHTML(plan, key, idx) {
+    var text = A.aheadOf(key, plan.id);
+    var nItems = A.itemTotalCount(key, plan.id);
+    var rel = A.relDayLabel(key) || A.fmtDateCN(key);
+    /* 未来日期的具体项目用只读形态展示（withCheck=false）：
+       勾选完成是全局按 secId 判定的，未来日期一旦能勾选会提前把章节标成已完成，
+       污染进度与可选列表，故规划阶段只选不选勾。 */
+    var itemsHTML = todayItemsHTML(key, plan.id, false, { label: rel + '具体项目' });
+    return '<div class="card plan-item rise" style="--d:' + (Math.min(idx, 12) * 0.05).toFixed(2) + 's">' +
+      '<div class="plan-item-head"><div class="plan-task">' + esc(plan.task) + '</div>' +
+      subjectTag(plan.subject) + '</div>' +
+      '<div class="plan-meta">' + timeRangeHTML(plan.startTime, plan.endTime) +
+      '<span class="tag tag-repeat">' + esc(A.repeatLabel(plan)) + '</span>' +
+      (nItems ? '<span class="tag">已选 ' + nItems + ' 项</span>' : '') + '</div>' +
+      (plan.note ? '<div class="plan-note">备注：' + esc(plan.note) + '</div>' : '') +
+      itemsHTML +
+      (!nItems ? '<div class="plan-note" style="margin-top:10px">还没选' + esc(rel) +
+        '的具体项目，点下面的按钮从章节里挑，或手动补充。</div>' : '') +
+      '<div class="plan-actions">' +
+      '<button class="btn btn-sm" data-act="focus-edit" data-id="' + esc(plan.id) +
+      '" data-key="' + esc(key) + '">' + ic('ic-book', 14) +
+      (nItems ? '修改具体项目' : '选择具体项目') + '</button>' +
+      '</div>' +
+      '<div class="ahead-form">' +
+      '<label class="lbl" for="ahead-input-' + idx + '">规划内容（自由填写）</label>' +
+      '<textarea class="textarea" id="ahead-input-' + idx + '" data-ahead-plan="' + esc(plan.id) +
+      '" data-ahead-date="' + esc(key) + '" placeholder="' + esc(rel) +
+      '这个项目具体做什么？写清楚更容易落地">' +
+      esc(text) + '</textarea>' +
+      '<div class="ahead-tip' + (text ? ' saved' : '') + '">' + (text ? '已保存' : '填写后自动保存，每个项目独立保存') + '</div>' +
+      '</div></div>';
+  }
+
+  function renderAheadCheckin(root) {
+    var today = A.today();
+    var key = aheadKeyOf();
+    ui.aheadDate = key;
+    var plans = A.sortPlansByTime(A.plansOfDay(key));
+    // 「已安排」= 写了规划文本 或 选了具体项目，二者任一即算这一项已规划
+    var filled = plans.filter(function (p) {
+      return !!A.aheadOf(key, p.id) || A.itemTotalCount(key, p.id) > 0;
+    }).length;
+    var itemsPlanned = plans.filter(function (p) { return A.itemTotalCount(key, p.id) > 0; }).length;
+    var pct = plans.length ? Math.round(filled * 1000 / plans.length) / 10 : 0;
+    /* 日期的友好标签：明天 / 后天 / 具体日期 */
+    var rel = A.relDayLabel(key) || A.fmtDateCN(key);
+    var minKey = A.shiftDays(today, AHEAD_MIN_OFFSET);
+    var maxKey = A.shiftDays(today, AHEAD_MAX_OFFSET);
+
+    var head = '<div class="card rise mb-16" style="--d:0s">' +
+      '<div class="card-head"><div>' +
+      '<div class="card-title"><span class="dot sec"></span>' + esc(A.fmtDateFull(key)) + ' · 规划</div>' +
+      '<div class="card-desc" style="margin-top:5px">提前安排' + esc(rel) + '每个项目的具体内容 · 已安排 <b id="ahead-filled">' +
+      filled + '</b> / ' + plans.length + ' 项 · 已选具体项目 <b id="ahead-items-filled">' +
+      itemsPlanned + '</b> 项</div></div>' +
+      '<div class="card-head-right">' +
+      '<button class="btn btn-sm" data-act="ahead-shift" data-v="-1"' + (key <= minKey ? ' disabled' : '') +
+      ' aria-label="前一天">‹ 前一天</button>' +
+      '<button class="btn btn-sm" data-act="ahead-shift" data-v="1"' + (key >= maxKey ? ' disabled' : '') +
+      ' aria-label="后一天">后一天 ›</button>' +
+      '<button class="btn btn-sm btn-primary" data-act="ahead-back">返回今天</button>' +
+      '</div></div>' +
+      '<div class="bar-track" style="height:10px"><div class="bar-fill" id="ahead-bar-fill" style="width:' + Math.max(2, pct).toFixed(1) +
+      '%;background:linear-gradient(90deg,var(--primary),var(--secondary))"></div></div>' +
+      '<div class="card-desc" style="margin-top:8px">点每张卡片的「选择具体项目」按钮，可像今天打卡一样从章节里挑小节或手动补充；' +
+      '按日期独立保存，到那天会自动出现在打卡页。这里只做规划，不会产生打卡记录，也不影响今天的打卡数据。</div>' +
+      '</div>';
+
+    var body = plans.length
+      ? plans.map(function (p, i) { return aheadPlanCardHTML(p, key, i); }).join('')
+      : '<div class="card rise">' + emptyState({
+        emoji: '🗓️', title: rel + '没有可规划的项目',
+        desc: '这一天没有适用的学习计划。先去「每日计划」添加每天重复或指定星期的计划，再回来填写明日规划。',
+        action: '<a class="btn btn-primary" href="#/plan">' + ic('ic-plan', 16) + '去建计划</a>'
+      }) + '</div>';
+
+    root.innerHTML = head + body;
+    setPageTitle('明日规划', '提前安排未来的学习内容，随时回到当天打卡');
+  }
+
   function renderCheckin(root) {
+    /* 「明日规划」模式：提前打开未来某一天的 checkin 界面填写规划内容。
+       与当天打卡完全隔离 —— 只写 days[日期].ahead[计划ID]，
+       不碰 focus / sel / done / manuals / records，因此不影响现有打卡流程。 */
+    if (ui.aheadMode) { renderAheadCheckin(root); return; }
+    setPageTitle('学习打卡', '与每日计划联动，计时记录每一次专注');
     var t = A.today();
     var plans = A.plansOfDay(t);
     var recs = A.recordsOfDay(t);
@@ -4138,8 +4345,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<div class="card-title"><span class="dot"></span>' + esc(A.fmtDateFull(t)) + '</div>' +
       '<div class="card-desc" style="margin-top:5px">今日 ' + plans.length + ' 项任务 · 已完成 ' + done +
       ' 项 · 累计 ' + esc(A.fmtDur(sec)) + '</div></div>' +
-      '<button class="btn btn-sm btn-primary" data-act="quick-add-task">' + ic('ic-plus', 14) + '临时任务</button>' +
-      '</div>' +
+      '<div class="card-head-right">' +
+      '<button class="btn btn-sm btn-primary" data-act="ahead-open">' + ic('ic-calendar', 14) + '明日规划</button>' +
+      '<button class="btn btn-sm" data-act="quick-add-task">' + ic('ic-plus', 14) + '临时任务</button>' +
+      '</div></div>' +
       '<div class="bar-track" style="height:10px"><div class="bar-fill" style="width:' + Math.max(2, pct).toFixed(1) +
       '%;background:linear-gradient(90deg,var(--primary),var(--secondary))"></div></div>' +
       '<div class="card-desc" style="margin-top:8px">完成度 ' + pct.toFixed(1) + '%' +
@@ -4970,6 +5179,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var keys = {};
     S.records.forEach(function (r) { keys[r.date] = 1; });
     Object.keys(S.days).forEach(function (k) {
+      // 「明日规划」会提前建好未来的 days 条目，历史归档不应出现未来日期
+      if (k > A.today()) return;
       if (Object.keys(S.days[k].focus || {}).length) keys[k] = 1;
     });
     keys[A.today()] = 1;
@@ -5476,19 +5687,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ui.finishState = { planId: planId, key: key, sec: sec, mastery: chosen };
   }
 
-  function openItemsModal(planId) {
+  /* 「设置具体项目」弹窗：dateKey 省略时默认今天（当天打卡 / 计划页 / 首页入口）。
+     明日规划页会传入未来日期，写入 days[那天].sel / .manuals —— 与今天按日期隔离，
+     到那天打卡时自然显示，无需任何「带入」操作。 */
+  function openItemsModal(planId, dateKey) {
     var plan = A.planById(planId);
     if (!plan) return;
-    var key = A.today();
+    var key = A.isDateKey(dateKey) ? dateKey : A.today();
+    var isFuture = key > A.today();
+    var dayLabel = A.relDayLabel(key) || A.fmtDateCN(key);
     var subjs = A.subjectsOfChapters();
     var initSubj = (plan && subjs.indexOf(plan.subject) >= 0) ? plan.subject : (subjs[0] || '');
     ui.itemsState = {
-      planId: planId, key: key, subject: initSubj,
+      planId: planId, key: key, isFuture: isFuture, subject: initSubj,
       sel: A.daySel(key, planId),
       manuals: A.dayManuals(key, planId)
     };
     A.openModal({
-      title: '今日学习具体项目',
+      title: isFuture ? dayLabel + '的学习具体项目' : '今日学习具体项目',
       sub: plan.subject + ' · ' + plan.task + ' · ' + A.fmtDateCN(key),
       body: '<div id="items-modal-body">' + itemsModalBodyHTML() + '</div>',
       maskClose: false
@@ -5565,7 +5781,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<div class="pick-list">' + manualRows + '</div>' +
       '<div class="manual-add"><input class="input" id="manual-input" placeholder="如：复习错题本 P10" data-act="manual-input">' +
       '<button class="btn btn-sm" data-act="items-add-manual">添加</button></div></div>' +
-      '<div class="hint">每天独立保存；勾选完成会与打卡页联动。历史归档在「历史记录」。</div>' +
+      '<div class="hint">' + (st.isFuture
+        ? '按日期独立保存，到那天会自动出现在打卡页；现在只做规划，不会产生打卡记录，也不影响今天。'
+        : '每天独立保存；勾选完成会与打卡页联动。历史归档在「历史记录」。') + '</div>' +
       '<div class="modal-foot"><button type="button" class="btn" data-act="modal-close">取消</button>' +
       '<button type="button" class="btn btn-primary" data-act="items-submit">保存</button></div>';
   }
@@ -5883,7 +6101,42 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   ACT['goto-checkin'] = function () { location.hash = '#/checkin'; };
 
-  ACT['focus-edit'] = function (n) { openItemsModal(n.getAttribute('data-id')); };
+  /* ---------- 明日规划：进入 / 前后切换日期 / 返回今天 ---------- */
+  ACT['ahead-open'] = function () {
+    flushAheadSave();
+    // 进入时默认展示次日
+    ui.aheadMode = true;
+    ui.aheadDate = A.shiftDays(A.today(), 1);
+    A.renderNav();
+    rerenderCurrent();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+  ACT['ahead-back'] = function () {
+    flushAheadSave();
+    ui.aheadMode = false;
+    ui.aheadDate = '';
+    A.renderNav();
+    rerenderCurrent();
+  };
+  ACT['ahead-shift'] = function (n) {
+    flushAheadSave();
+    var v = Number(n.getAttribute('data-v')) || 0;
+    var key = aheadKeyOf();
+    var next = A.shiftDays(key, v);
+    var min = A.shiftDays(A.today(), AHEAD_MIN_OFFSET);
+    var max = A.shiftDays(A.today(), AHEAD_MAX_OFFSET);
+    if (next < min) next = min;
+    if (next > max) next = max;
+    ui.aheadDate = next;
+    rerenderCurrent();
+  };
+
+  ACT['focus-edit'] = function (n) {
+    // 先落盘文本框里还没到防抖时间的规划内容，否则弹窗保存后重渲染会把它冲掉
+    flushAheadSave();
+    // data-key 由「明日规划」卡片提供；其余入口没有该属性 → 默认今天
+    openItemsModal(n.getAttribute('data-id'), n.getAttribute('data-key'));
+  };
 
   /* ---------- 今日项目：章节多选 / 手动项 ---------- */
   ACT['items-pick'] = function (n) {
@@ -5918,7 +6171,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     A.setDayItems(st.key, st.planId, st.sel, st.manuals);
     A.setFocus(st.key, st.planId, ''); // 清空旧文本，避免与结构化项目重复展示
     A.closeModal();
-    A.toast('今日项目已保存', 'ok');
+    A.toast(st.isFuture ? '该日具体项目已保存' : '今日项目已保存', 'ok');
     ui.itemsState = null;
     A.renderNav();
     rerenderCurrent();
@@ -6416,10 +6669,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* --------------------------------------------- 输入 / 变更委托 */
   document.addEventListener('input', function (e) {
     var n = e.target.closest ? e.target.closest('[data-filter]') : null;
-    if (!n) return;
-    var key = n.getAttribute('data-filter');
-    ui.filters[key] = n.value;
-    refreshHistoryBody();
+    if (n) {
+      var key = n.getAttribute('data-filter');
+      ui.filters[key] = n.value;
+      refreshHistoryBody();
+      return;
+    }
+    /* 明日规划内容：输入即防抖落盘（每个项目按 日期+计划ID 独立保存） */
+    var a = e.target.closest ? e.target.closest('[data-ahead-plan]') : null;
+    if (a) { scheduleAheadSave(a); }
+  });
+  // 失焦时立即保存，避免切换日期/返回今天时丢掉最后几个字
+  document.addEventListener('change', function (e) {
+    var a = e.target.closest ? e.target.closest('[data-ahead-plan]') : null;
+    if (a) { flushAheadSave(); }
   });
   document.addEventListener('change', function (e) {
     var n = e.target.closest ? e.target.closest('[data-change]') : null;
@@ -6457,6 +6720,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     else if (route === 'history') renderHistory(root);
   };
 
+  /* 离开打卡页前先落盘「明日规划」里尚未保存的内容，
+     否则切换路由时防抖还没到，输入会丢。 */
+  A.flushAheadSave = function () { flushAheadSave(); };
+
   A.renderPageActions = function () {
     var box = $('#page-actions');
     if (!box) return;
@@ -6472,8 +6739,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       ic(tIcon, 15) + '</button>';
     var t = S.timer;
     /* 首页已有置顶的「正在计时」卡（信息更全、还能直接暂停/结束），
-       这里再挂一个只显示时长的跳转按钮就是重复信息，故首页隐藏。 */
-    if (t && ui.route !== 'checkin' && ui.route !== 'home') {
+       这里再挂一个只显示时长的跳转按钮就是重复信息，故首页隐藏。
+       打卡页本身有计时卡，但「明日规划」模式没有 —— 此时顶栏补一个入口，
+       避免用户正在计时却切到规划页后看不到计时状态。 */
+    var hideTimer = ui.route === 'home' || (ui.route === 'checkin' && !ui.aheadMode);
+    if (t && !hideTimer) {
       html += '<button class="btn btn-sm btn-primary" data-act="goto-timer">' +
         '<span class="dot-live' + (t.running ? '' : ' paused') + '"></span>' +
         '<span data-timer-text>' + A.fmtClock(A.timerElapsed()) + '</span></button>';
@@ -6482,7 +6752,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       html += '<a class="btn btn-sm" href="#/plan">' + ic('ic-plus', 14) + '新建计划</a>' +
         '<a class="btn btn-sm btn-primary" href="#/checkin">' + ic('ic-play', 14) + '开始打卡</a>';
     } else if (ui.route === 'checkin') {
-      html += '<a class="btn btn-sm" href="#/plan">' + ic('ic-plan', 14) + '管理计划</a>';
+      if (ui.aheadMode) {
+        /* 明日规划模式：顶栏给出「返回今天打卡」的显眼入口，随时能回到当天打卡 */
+        html += '<button class="btn btn-sm btn-primary" data-act="ahead-back">返回今天打卡</button>';
+      } else {
+        html += '<a class="btn btn-sm" href="#/plan">' + ic('ic-plan', 14) + '管理计划</a>';
+      }
     } else if (ui.route === 'plan') {
       html += '<a class="btn btn-sm btn-primary" href="#/checkin">' + ic('ic-play', 14) + '去打卡</a>';
     } else if (ui.route === 'import') {
@@ -6713,6 +6988,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           sel: mergeDaySel(da.sel, db.sel),
           done: mergeDayDone(da.done, db.done),
           manuals: mergeDayManuals(da.manuals, db.manuals),
+          ahead: mergeDayAhead(da.ahead, db.ahead),
           createdAt: Math.max(da.createdAt || 0, db.createdAt || 0)
         };
       }
@@ -6763,6 +7039,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         else if ((it.done ? 1 : 0) >= (cur.done ? 1 : 0)) map[it.id] = it;
       });
       out[p] = Object.keys(map).map(function (k) { return map[k]; });
+    });
+    return out;
+  }
+  /* 合并两端 ahead（明日规划，按 planId 逐项合并）：
+     取内容更长的一方（与 focus 同口径），避免空值把另一端的规划抹掉。 */
+  function mergeDayAhead(aa, ab) {
+    aa = aa || {}; ab = ab || {};
+    var out = {}, pk = {};
+    Object.keys(aa).forEach(function (p) { pk[p] = 1; });
+    Object.keys(ab).forEach(function (p) { pk[p] = 1; });
+    Object.keys(pk).forEach(function (p) {
+      var va = aa[p] || '', vb = ab[p] || '';
+      out[p] = (vb.length >= va.length) ? vb : va;
     });
     return out;
   }
