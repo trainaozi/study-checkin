@@ -446,6 +446,7 @@ a { color: var(--primary-dark); text-decoration: none; }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: var(--disabled-opacity); pointer-events: none; }
 
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-stat-lead { display: inline-flex; flex: 0 0 auto; align-items: center; font-size: 18px; line-height: 1; }
 .chip {
   padding: 6px 13px; border-radius: 999px;
   background: var(--surface-raised); border: 1px solid var(--line);
@@ -920,6 +921,8 @@ label.lbl .req { color: var(--secondary-ink); margin-left: 2px; }
   display: grid; place-items: center;
   color: var(--accent-on);
   cursor: pointer;
+  /* <button> 默认 padding:1px 6px 会撑开 grid 列轨道，使对勾右偏 3px；<span> 只读态没有这个问题 */
+  padding: 0;
   transition: all .18s;
   margin-top: 1px;
 }
@@ -3726,8 +3729,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' + id + '"/></svg>';
   }
   function emptyState(o) {
+    /* emoji: '' 表示「不渲染图标」（统计图标已从看板空状态迁移到卡片上方）；
+       其余调用方不传或传正常 emoji 时行为完全不变。 */
     return '<div class="empty">' +
-      '<span class="e-emoji">' + (o.emoji || '🌿') + '</span>' +
+      (o.emoji === '' ? '' : '<span class="e-emoji">' + (o.emoji || '🌿') + '</span>') +
       '<div class="e-title">' + esc(o.title || '') + '</div>' +
       '<div class="e-desc">' + esc(o.desc || '') + '</div>' +
       (o.action || '') + '</div>';
@@ -3780,9 +3785,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ------------------------------------------------------------------
      首页「正在计时」卡
      计时器全局唯一（core 的 startTimer 会拒绝第二个），所以这里直接取 S.timer。
-     刷新策略：计时中每秒只由 syncTimerUI 改写 [data-timer-text]，不重建 DOM；
+     刷新策略：计时中每秒由 syncTimerUI 改写 [data-timer-text] 与
+     [data-run-bar] / [data-run-pct] / [data-run-spent] 三个锚点，全程不重建 DOM；
      暂停/继续/结束这类会改变按钮形态的操作，由 ACT 里的 rerenderCurrent() 重渲染整页。
      timer.date 可能不是今天（跨天未结束），此时仍展示并提示，结束后归入原日期。 */
+  /* 首页计时卡进度 / 投入时长：渲染与每秒刷新共用的唯一口径。
+     - invested = 已入库记录(spent) + 本次进行中(live)，二者互斥：timer 还在就说明本次尚未入库，
+       timer 清空时本次已经写进 records，因此不会重复累计，也不会在暂停/结束弹窗时回退。
+     - pct 量化到 0.1 精度，用于 bar-fill 的宽度计算，这个小数不展示给用户；
+       home-run-hint 只显示 Math.round(pct) 的整数，避免文案每秒抖动。
+     计时中每秒由 syncTimerUI 重算一次（只改 DOM 属性，不重建节点）。 */
+  function homeRunningProgress(sec) {
+    var t = S.timer;
+    if (!t) return null;
+    var key = t.date || A.today();
+    var plan = A.planById(t.planId);
+    var spent = plan ? A.durationOfTask(key, t.planId) : 0;   // 当天该任务已入库的时长
+    var needMin = plan ? A.planRequiredMin(plan) : A.DEFAULT_PLAN_MINUTES;
+    var live = (typeof sec === 'number') ? sec : A.timerElapsed();
+    var invested = spent + live;                                // 当天累计投入，含进行中
+    var raw = needMin > 0 ? A.clamp(invested / (needMin * 60) * 100, 0, 100) : 0;
+    return { pct: Math.round(raw * 10) / 10, spent: spent, invested: invested, needMin: needMin };
+  }
+
   function homeRunningHTML() {
     var t = S.timer;
     if (!t) return '';
@@ -3791,9 +3816,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var title = plan ? plan.task : '（计划已删除）';
     var subject = plan ? plan.subject : '未分类';
     var sec = A.timerElapsed();
-    var spent = plan ? A.durationOfTask(key, t.planId) : 0;   // 当天已入库的时长
-    var needMin = plan ? A.planRequiredMin(plan) : A.DEFAULT_PLAN_MINUTES;
-    var pct = needMin > 0 ? A.clamp((spent + sec) / (needMin * 60) * 100, 0, 100) : 0;
+    var prog = homeRunningProgress(sec);
+    var pct = prog.pct;              // 0.1 精度的小数，供宽度使用
+    var invested = prog.invested;    // 当天累计投入（含本次进行中）
+    var needMin = prog.needMin;
     var stale = key !== A.today();
 
     return '<div class="card rise home-running' + (t.running ? '' : ' is-paused') + '" style="--d:0s">' +
@@ -3806,14 +3832,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<div class="home-run-task">' + esc(title) + '</div>' +
       '<div class="home-run-meta">' + subjectTag(subject) +
       (plan ? timeRangeHTML(plan.startTime || '--:--', plan.endTime || '--:--') : '') +
-      '<span class="tag">今日已投入 ' + esc(A.fmtDur(spent)) + '</span>' +
+      /* 整个 tag 做锚点、仍是单一文本节点：.tag 是 inline-flex + gap，塞内层 span 会多出 5px 间隙，
+         那会改变原有页面样式。文案格式固定为「今日已投入 + A.fmtDur()」，与旧版逐字一致。 */
+      '<span class="tag" data-run-spent>今日已投入 ' + esc(A.fmtDur(invested)) + '</span>' +
       (stale ? '<span class="tag tag-running">跨天 · ' + esc(A.fmtDateCN(key)) + '</span>' : '') +
       '</div>' +
-      /* 进度条底色由 .home-running .bar-fill 的 --grad-running-bar 提供（深底上要换成亮色） */
-      '<div class="bar-track home-run-bar"><div class="bar-fill" style="width:' +
+      /* 进度条底色由 .home-running .bar-fill 的 --grad-running-bar 提供（深底上要换成亮色）。
+         data-run-* 是每秒刷新的锚点，bar 用 0.1 精度小数、hint 用四舍五入整数。 */
+      '<div class="bar-track home-run-bar"><div class="bar-fill" data-run-bar style="width:' +
       Math.max(2, pct).toFixed(1) + '%"></div></div>' +
       '<div class="home-run-hint">计划时长 ' + esc(A.fmtDur(needMin * 60)) +
-      ' · 含本次已进行 ' + pct.toFixed(0) + '%' +
+      ' · 含本次已进行 <span data-run-pct>' + Math.round(pct) + '</span>%' +
       (stale ? '（跨天未结束，结束后记入 ' + esc(A.fmtDateCN(key, false)) + '）' : '') + '</div>' +
       '</div>' +
       '<div class="home-run-clock">' +
@@ -4005,9 +4034,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ================================================================
      今日项目展示（结构化：章节小节 + 手动项 + 勾选）
      ============================================================ */
-  function itemRowHTML(itemId, title, sub, estMin, isDone, planId, key, withCheck) {
+  function itemRowHTML(itemId, title, sub, estMin, isDone, planId, key, withCheck, actName) {
+    /* 结束打卡弹窗复用同一套勾选 UI，但走独立 ACT（局部刷新弹窗内容，不重建表单） */
+    var act = actName || 'item-toggle';
     var check = withCheck
-      ? '<button class="item-check' + (isDone ? ' on' : '') + '" data-act="item-toggle" data-plan="' + esc(planId) + '" data-item="' + esc(itemId) + '" data-key="' + esc(key) + '" aria-label="勾选完成">' + (isDone ? ic('ic-check', 14) : '') + '</button>'
+      ? '<button type="button" class="item-check' + (isDone ? ' on' : '') + '" data-act="' + esc(act) + '" data-plan="' + esc(planId) + '" data-item="' + esc(itemId) + '" data-key="' + esc(key) + '" aria-label="勾选完成">' + (isDone ? ic('ic-check', 14) : '') + '</button>'
       : '<span class="item-check' + (isDone ? ' on' : '') + '">' + (isDone ? ic('ic-check', 14) : '') + '</span>';
     return '<div class="today-item' + (isDone ? ' done' : '') + '">' + check +
       '<div class="today-item-main"><div class="today-item-title">' + esc(title) + '</div>' +
@@ -4025,7 +4056,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var manuals = A.dayManuals(key, planId);
     var done = A.dayDoneMap(key, planId);
     var focus = A.focusOf(key, planId);
-    if (!sel.length && !manuals.length) {
+    /* 历史数据兜底：旧版「设置今日项目」弹窗保存时会把已勾选完成的小节从 sel 里剔除，
+       但 done map 仍留着完成记录。把这类孤立小节补回展示（只读/可勾选随 withCheck），
+       既修复已发生的历史缺失，也保证归档与明细的「已完成章节小节」记录完整。
+       listed 去重，避免与已恢复正常写回的 sel 重复渲染。 */
+    var listed = {};
+    sel.forEach(function (sid) { listed[sid] = 1; });
+    manuals.forEach(function (m) { listed[m.id] = 1; });
+    var orphanDone = Object.keys(done).filter(function (k) {
+      return done[k] && !listed[k] && !!A.findSection(k);
+    });
+    if (!sel.length && !manuals.length && !orphanDone.length) {
       return opts.noHead ? '' : (focus ? '<div class="plan-focus"><span class="fl">' + esc(label) + '：</span>' + esc(focus) + '</div>' : '');
     }
     // openSel 仅用于「待完成」计数/预估；展示仍包含已完成（标记 done 即可，不隐藏）
@@ -4036,9 +4077,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var rows = sel.map(function (sid) {
       var f = A.findSection(sid);
       if (!f) return '';
-      return itemRowHTML(sid, f.section.title, f.chapter.title, f.section.estMin, A.isSectionDone(sid), planId, key, withCheck);
+      return itemRowHTML(sid, f.section.title, f.chapter.title, f.section.estMin, A.isSectionDone(sid), planId, key, withCheck, opts.act);
     }).join('') + manuals.map(function (m) {
-      return itemRowHTML(m.id, m.label, '手动补充', 0, !!done[m.id] || m.done, planId, key, withCheck);
+      return itemRowHTML(m.id, m.label, '手动补充', 0, !!done[m.id] || m.done, planId, key, withCheck, opts.act);
+    }).join('') + orphanDone.map(function (sid) {
+      var f = A.findSection(sid);
+      return itemRowHTML(sid, f.section.title, f.chapter.title, f.section.estMin, true,
+        planId, key, withCheck, opts.act);
     }).join('');
     if (opts.noHead) {
       return '<div class="today-items-list">' + rows + '</div>';
@@ -4854,6 +4899,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var rangeChips = [[7, '近 7 天'], [30, '近 30 天'], [90, '近 90 天'], [0, '全部']].map(function (c) {
       return '<button class="chip' + (n === c[0] ? ' active' : '') + '" data-act="dash-range" data-v="' + c[0] + '">' + c[1] + '</button>';
     }).join('');
+    /* 统计图标：由页面底部空状态卡迁移到「章节计划完成进度 / 预计完成时间」上方，
+       作为这两项内容的视觉引导。挂在已有的 .chip-row（flex + flex-wrap）行内，
+       不新增块级行、不改 mb-16 间距，窄屏换行行为沿用原 chip-row。 */
+    var statLead = '<span class="dash-stat-lead" aria-hidden="true">📊</span>';
 
     // 章节计划完成进度——仅展示已完成的章节小节，按 学科 → 大章 分组汇总。
     // 完成数据来自 store.days[].done，与「打卡记录」相互独立，故无论区间内有无打卡记录都应展示。
@@ -4884,11 +4933,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
 
     if (!recs.length) {
-      root.innerHTML = '<div class="chip-row mb-16">' + rangeChips + '</div>' +
+      root.innerHTML = '<div class="chip-row mb-16">' + statLead + rangeChips + '</div>' +
         chapDash +
         etaCard +
         '<div class="card rise">' + emptyState({
-          emoji: '📊', title: '这个区间还没有打卡数据',
+          emoji: '', title: '这个区间还没有打卡数据',
           desc: '完成一次打卡后，这里会出现科目分布、时长趋势和掌握程度统计。',
           action: '<a class="btn btn-primary" href="#/checkin">' + ic('ic-play', 16) + '去打卡</a>'
         }) + '</div>';
@@ -4939,9 +4988,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ];
 
     root.innerHTML =
-      '<div class="chip-row mb-16">' + rangeChips +
-      '<span style="flex:1"></span>' +
-      '<button class="chip" data-act="export-csv">' + ic('ic-download', 13) + ' 导出 CSV</button></div>' +
+      '<div class="chip-row mb-16">' + statLead + rangeChips + '</div>' +
       '<div class="grid grid-kpi mb-16">' + kpis.map(kpi).join('') + '</div>' +
       chapDash +
       etaCard +
@@ -5181,7 +5228,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     Object.keys(S.days).forEach(function (k) {
       // 「明日规划」会提前建好未来的 days 条目，历史归档不应出现未来日期
       if (k > A.today()) return;
-      if (Object.keys(S.days[k].focus || {}).length) keys[k] = 1;
+      var d = S.days[k] || {};
+      /* 只要有结构化「今日具体项目」或勾选完成记录就收录 —— 不能只看 focus 文本，
+         否则「只选了章节、并勾选完成、但没写文字也没打卡」的日期会从归档里消失。 */
+      var hasFocus = Object.keys(d.focus || {}).length > 0;
+      var hasItems = ['sel', 'manuals', 'done'].some(function (field) {
+        return Object.keys(d[field] || {}).some(function (p) {
+          var v = d[field][p];
+          return Array.isArray(v) ? v.length > 0 : Object.keys(v || {}).length > 0;
+        });
+      });
+      if (hasFocus || hasItems) keys[k] = 1;
     });
     keys[A.today()] = 1;
     var list = Object.keys(keys).filter(function (k) {
@@ -5650,6 +5707,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ================================================================
      弹窗：结束打卡 / 今日项目 / 临时任务
      ================================================================ */
+  /* 结束打卡弹窗的「完成情况」清单：复用打卡页同款 .item-check。
+     勾选状态与打卡页共用 days[key].done，两处始终一致。 */
+  function finishItemsBoxHTML(key, planId) {
+    if (!A.itemTotalCount(key, planId)) {
+      return '<div class="hint">本次打卡还没有结构化的具体项目。可先在打卡页 / 计划页设置，' +
+        '或在下方补充文字说明。</div>';
+    }
+    return todayItemsHTML(key, planId, true, {
+      label: '完成情况（点方框勾选）',
+      act: 'finish-item-toggle'
+    });
+  }
+
   function openFinishModal(planId) {
     var plan = A.planById(planId);
     var t = S.timer;
@@ -5674,8 +5744,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           return '<button type="button" data-act="pick-mastery" data-v="' + m.v + '"' + (m.v === chosen ? ' class="on"' : '') + '>' +
             '<span class="m-emoji">' + m.emoji + '</span><span class="m-text">' + m.text + '</span></button>';
         }).join('') + '</div></div>' +
-        '<div class="form-row"><label class="lbl">今日学习具体项目</label>' +
-        '<textarea class="textarea" name="focus" placeholder="这次具体学了什么？">' + esc(focusNow) + '</textarea></div>' +
+        '<div class="form-row"><label class="lbl">今日学习具体项目 · 完成情况</label>' +
+        '<div id="finish-items-box">' + finishItemsBoxHTML(key, planId) + '</div>' +
+        '<textarea class="textarea" name="focus" style="margin-top:8px" placeholder="这次具体学了什么？">' +
+        esc(focusNow) + '</textarea></div>' +
         '<div class="form-row"><label class="lbl">备注 / 复盘</label>' +
         '<textarea class="textarea" name="note" placeholder="难点、错题、下一步计划……"></textarea></div>' +
         '<div class="modal-foot">' +
@@ -5701,7 +5773,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ui.itemsState = {
       planId: planId, key: key, isFuture: isFuture, subject: initSubj,
       sel: A.daySel(key, planId),
-      manuals: A.dayManuals(key, planId)
+      manuals: A.dayManuals(key, planId),
+      /* 已完成的小节不显示在弹窗的可编辑列表里，但必须原样带回存储，
+         否则「勾选完成 → 再新增小节 → 保存」会把已完成项从 sel 中吞掉。 */
+      keepDone: []
     };
     A.openModal({
       title: isFuture ? dayLabel + '的学习具体项目' : '今日学习具体项目',
@@ -5714,8 +5789,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function itemsModalBodyHTML() {
     var st = ui.itemsState;
     if (!st) return '';
-    // 已完成（已勾选）的章节小节不再参与今日项目：从选择集中剔除，保证该处只展示未完成项
-    st.sel = st.sel.filter(function (sid) { return !A.isSectionDone(sid); });
+    /* 已完成（已勾选）的小节不进入弹窗的可编辑列表（只展示未完成项），
+       但**不能丢弃**：收进 keepDone，保存时按原顺序写回 sel。
+       本函数会被 refreshItemsModal 多次调用，indexOf 保证 keepDone 不重复累加。 */
+    st.sel = st.sel.filter(function (sid) {
+      if (!A.isSectionDone(sid)) return true;
+      if (st.keepDone.indexOf(sid) < 0) st.keepDone.push(sid);
+      return false;
+    });
     var allChapters = A.chaptersAll();
     var plan = A.planById(st.planId);
     // 学科筛选：仅展示该学科下的章节，确保科目与内容一一对应
@@ -6168,7 +6249,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   ACT['items-submit'] = function () {
     var st = ui.itemsState;
     if (!st) return;
-    A.setDayItems(st.key, st.planId, st.sel, st.manuals);
+    /* 以存储里的原始顺序为基准合并，保证「勾选完成 → 新增小节 → 保存」三者齐全：
+       ① 原有项（含已完成但弹窗不展示的）只要没被主动移除就留在原位；
+       ② 弹窗里新选的小节追加到末尾；
+       ③ 全程按 id 去重，多次新增 / 多次保存不丢、不覆盖、不重复。
+       done（勾选完成状态）不在这里重写，由 A.setDayItems 原样保留。 */
+    var keep = {}, seen = {}, merged = [];
+    (st.keepDone || []).concat(st.sel).forEach(function (sid) { if (sid) keep[sid] = 1; });
+    A.daySel(st.key, st.planId).forEach(function (sid) {
+      if (keep[sid] && !seen[sid]) { merged.push(sid); seen[sid] = 1; }
+    });
+    st.sel.forEach(function (sid) {
+      if (sid && !seen[sid]) { merged.push(sid); seen[sid] = 1; }
+    });
+    (st.keepDone || []).forEach(function (sid) {
+      if (sid && !seen[sid]) { merged.push(sid); seen[sid] = 1; }
+    });
+    var manuals = [], mSeen = {};
+    st.manuals.forEach(function (m) {
+      if (!m || !m.id || mSeen[m.id]) return;
+      mSeen[m.id] = 1; manuals.push(m);
+    });
+    A.setDayItems(st.key, st.planId, merged, manuals);
     A.setFocus(st.key, st.planId, ''); // 清空旧文本，避免与结构化项目重复展示
     A.closeModal();
     A.toast(st.isFuture ? '该日具体项目已保存' : '今日项目已保存', 'ok');
@@ -6182,6 +6284,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var itemId = n.getAttribute('data-item');
     var key = n.getAttribute('data-key') || A.today();
     A.toggleItemDone(key, planId, itemId);
+    A.renderNav();
+    rerenderCurrent();
+  };
+  /* 结束打卡弹窗内的勾选：只局部刷新清单，保留表单里已填的时长 / 掌握度 / 备注。
+     打卡页在弹窗背后，rerenderCurrent 只动 #view-*，不会关掉弹窗。 */
+  ACT['finish-item-toggle'] = function (n) {
+    var st = ui.finishState;
+    if (!st) return;
+    var planId = n.getAttribute('data-plan');
+    var itemId = n.getAttribute('data-item');
+    if (!planId || planId !== st.planId || !itemId) return;
+    A.toggleItemDone(st.key, planId, itemId);
+    var box = $('#finish-items-box');
+    if (box) box.innerHTML = finishItemsBoxHTML(st.key, planId);
     A.renderNav();
     rerenderCurrent();
   };
@@ -6774,6 +6890,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var sec = A.timerElapsed();
     var txt = A.fmtClock(sec);
     $$('[data-timer-text]').forEach(function (n) { n.textContent = txt; });
+    /* 首页计时卡：计时数字、进度条、当天累计投入同帧刷新，
+       不再依赖暂停/继续或切页触发的整页重渲染。只改属性，不重建节点，也不碰任何样式规则。 */
+    var bar = $('[data-run-bar]');
+    var pctEl = $('[data-run-pct]');
+    var spentEl = $('[data-run-spent]');
+    if (bar || pctEl || spentEl) {
+      var prog = homeRunningProgress(sec);
+      if (prog) {
+        if (bar) bar.style.width = Math.max(2, prog.pct).toFixed(1) + '%';   // 0.1 精度，不展示
+        if (pctEl) pctEl.textContent = String(Math.round(prog.pct));          // 四舍五入整数，展示
+        if (spentEl) spentEl.textContent = '今日已投入 ' + A.fmtDur(prog.invested);
+      }
+    }
     document.title = (t && t.running ? txt + ' · ' : '') + '晨露学习打卡 · Study Check-in';
   };
 
