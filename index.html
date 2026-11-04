@@ -1333,6 +1333,7 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 }
 .tree-toggle.open .caret { transform: rotate(90deg); }
 .tree-toggle .tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-toggle .tree-name.chap-done { text-decoration: line-through; text-decoration-color: var(--strike); color: var(--ink-2); }
 .tree-toggle .tree-count { font-size: 11.5px; font-weight: 500; color: var(--muted); margin-left: 8px; white-space: nowrap; }
 .tree-children { display: none; padding-left: 14px; border-left: 2px solid var(--line); margin-left: 11px; }
 .tree-children.open { display: block; }
@@ -4990,9 +4991,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     root.innerHTML =
       '<div class="chip-row mb-16">' + statLead + rangeChips + '</div>' +
       '<div class="grid grid-kpi mb-16">' + kpis.map(kpi).join('') + '</div>' +
-      chapDash +
-      etaCard +
 
+      /* 统计图表区：KPI + 4 张图表 + 科目投入排行统一排在「章节计划完成进度 / 预计完成时间」之前，
+         先看区间统计再看长期计划进度；两张计划卡自身结构与进度数据均不变。 */
       '<div class="grid grid-2 mb-16">' +
       '<div class="card rise" style="--d:.06s">' +
       '<div class="card-head"><div class="card-title"><span class="dot"></span>科目时长分布</div>' +
@@ -5009,7 +5010,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '<span class="card-desc">主色为时长（分钟），副色为打卡次数</span></div>' +
       '<div class="chart-box tall"><canvas id="ch-trend"></canvas></div></div>' +
 
-      '<div class="grid grid-2">' +
+      '<div class="grid grid-2 mb-16">' +
       '<div class="card rise" style="--d:.2s">' +
       '<div class="card-head"><div class="card-title"><span class="dot sec"></span>各科目平均掌握度</div>' +
       '<span class="card-desc">满分 5</span></div>' +
@@ -5021,7 +5022,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       subjects.slice(0, 8).map(function (s, i) {
         return barLine(s, subjMap[s].sec, subjMap[subjects[0]].sec, A.colorFor(s, i), i);
       }).join('') +
-      '</div></div></div>';
+      '</div></div></div>' +
+      chapDash +
+      etaCard;
 
     if (typeof window.Chart === 'undefined') return;
     var Chart = window.Chart;
@@ -5463,8 +5466,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }).join('');
   }
 
+  /** 看板「章节计划完成进度」每章的完成态 / 开合态记忆。
+      key = 学科|章节 id；allDone 用于检测「未全部完成 → 全部完成」的跃变，
+      open 记录用户期望的开合（含手动操作），避免重渲染覆盖用户选择。 */
+  var doneChapState = {};
+  function doneChapKey(sub, ch) { return sub.subject + '|' + ch.id; }
+  /** 实时判定：该章下所有小节任务是否均已完成（空章不算达成） */
+  function chapterAllDone(ch) {
+    return ch.sections.length > 0 && ch.sections.every(function (s) { return !!s.done; });
+  }
+
   /** 数据看板「章节计划完成进度」：仅展示已完成的章节小节，按 学科 → 大章 分组。
-      学科头 / 大章头 显示「完成 X/Y 节 · 时长 Z%」，每条已完成小节列出名称、学习时长、完成日期。 */
+      学科头 / 大章头 显示「完成 X/Y 节 · 时长 Z%」，每条已完成小节列出名称、学习时长、完成日期。
+      全完成章节自动收起并给标题加删除线；只在状态跃变的那一帧自动收起，不影响手动开合。 */
   function doneTreesHTML(subjects) {
     if (!subjects || !subjects.length) return '';
     var html = '';
@@ -5475,14 +5489,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       sub.chapters.forEach(function (ch) {
         var doneSecs = ch.sections.filter(function (s) { return s.done; });
         if (!doneSecs.length) return; // 该大章无已完成小节则不展示
+        /* 状态联动：只在「未全部完成 → 全部完成」这一帧自动收起。
+           首次出现的已完成章也按完成态默认收起；之后一律沿用记录下来的开合态，
+           这样用户手动展开 / 收起不会被后续重渲染覆盖。 */
+        var allDone = chapterAllDone(ch);
+        var chapKey = doneChapKey(sub, ch);
+        var prev = doneChapState[chapKey];
+        var justCompleted = allDone && prev && prev.allDone === false;
+        var open = prev ? prev.open : !allDone;
+        if (justCompleted) open = false;
+        doneChapState[chapKey] = { allDone: allDone, open: open };
+        var openCls = open ? ' open' : '';
         var chId = 'tree-done-chap-' + treeSeq();
         chapHTML += '<div class="tree-node">' +
           '<div class="tree-head">' +
-            '<button class="tree-toggle open" data-act="tree-toggle" data-target="#' + chId + '">' +
-              '<span class="caret"></span><span class="tree-name">' + esc(ch.title) + '</span>' +
+            '<button class="tree-toggle' + openCls + '" data-act="tree-toggle" data-target="#' + chId + '" data-done-chap="' + esc(chapKey) + '">' +
+              '<span class="caret"></span><span class="tree-name' + (allDone ? ' chap-done' : '') + '">' + esc(ch.title) + '</span>' +
               '<span class="tree-count">完成 ' + doneSecs.length + '/' + ch.total + ' 节 · 时长 ' + ch.pct.toFixed(1) + '%</span>' +
             '</button></div>' +
-          '<div class="tree-children open" id="' + chId + '">' +
+          '<div class="tree-children' + openCls + '" id="' + chId + '">' +
             doneSecs.map(function (s) {
               return '<div class="tree-leaf done">' +
                 '<span class="leaf-check on">' + ic('ic-check', 12) + '</span>' +
@@ -6028,6 +6053,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if (!el) return;
     el.classList.toggle('open');
     n.classList.toggle('open');
+    /* 看板「章节计划完成进度」：记住用户手动开合，后续重渲染原样沿用，
+       不因该章仍是全完成态而再次强制收起。其它树不带此属性，行为不变。 */
+    var k = n.getAttribute('data-done-chap');
+    if (k && doneChapState[k]) doneChapState[k].open = n.classList.contains('open');
   };
   /** 导入计划页：一键展开/收起整棵计划树（学科、大章、小节一次性开合） */
   ACT['tree-toggle-all'] = function (n) {
